@@ -204,3 +204,15 @@ it("orders.view authorizes order reads without granting customer or payment dire
       )
     ).toBe(false)
 })
+
+it("allows reviewed native variant summaries while denying unrelated product expansions", () => {
+  expect(
+    validateFieldSelection(
+      "product-variants",
+      "id,title,sku,thumbnail,metadata,manage_inventory,inventory_quantity,*prices,product.id,product.title,product.handle,product.status,product.thumbnail,product.metadata"
+    )
+  ).toBe(true)
+  expect(validateFieldSelection("product-variants", "product.orders")).toBe(
+    false
+  )
+})

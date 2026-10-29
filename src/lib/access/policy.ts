@@ -276,6 +276,15 @@ export function validateFieldSelection(
       "variants.inventory_items.inventory.location_levels",
       "variants.inventory_items.required_quantity",
     ],
+    "product-variants": [
+      "inventory_quantity",
+      "product.id",
+      "product.title",
+      "product.handle",
+      "product.status",
+      "product.thumbnail",
+      "product.metadata",
+    ],
     users: ["id", "email", "first_name", "last_name", "avatar_url"],
   }
   const allowed = new Set([...safe, ...(extra[resource] || [])])
