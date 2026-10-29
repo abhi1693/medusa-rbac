@@ -4,7 +4,10 @@ const pkg = JSON.parse(
   await readFile(new URL("../package.json", import.meta.url), "utf8")
 )
 await build({
-  entryPoints: ["src/public/admin-access.ts", "src/client.ts"],
+  entryPoints: {
+    "admin-access": "src/public/admin-access.ts",
+    client: "src/client.ts",
+  },
   outdir: ".medusa/server/public",
   bundle: true,
   format: "esm",
@@ -14,3 +17,4 @@ await build({
   splitting: true,
   outExtension: { ".js": ".mjs" },
 })
+await import("./check-package.mjs")
