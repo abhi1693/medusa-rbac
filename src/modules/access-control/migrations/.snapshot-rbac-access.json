@@ -224,6 +224,22 @@
           "enumItems": [],
           "mappedType": "json"
         },
+        "rules": {
+          "name": "rules",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'[]'",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "json"
+        },
         "is_superuser": {
           "name": "is_superuser",
           "type": "boolean",
