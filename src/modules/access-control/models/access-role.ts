@@ -1,7 +1,7 @@
 import { model } from "@medusajs/framework/utils"
 
 export default model.define("rbac_access_role", {
-  id: model.id({ prefix: "uar" }).primaryKey(),
+  id: model.id({ prefix: "rbar" }).primaryKey(),
   key: model.text().unique(),
   name: model.text(),
   permissions: model.json(),

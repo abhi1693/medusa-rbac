@@ -217,7 +217,7 @@ class AccessControlService extends MedusaService({
     const deletion: UserDeletion = {
       actor_id: actorId,
       user_id: userId,
-      staff_id: staff ? staff.id : `usa_${randomUUID()}`,
+      staff_id: staff ? staff.id : `rbas_${randomUUID()}`,
       version: staff ? staff.version + 1 : 1,
       previous_active: staff ? staff.active : null,
       role_ids: assignments.map((assignment) => assignment.role_id),
@@ -463,7 +463,7 @@ class AccessControlService extends MedusaService({
       )
         invalid("Select at least one existing role")
       targetId = input.invite_id
-      const id = `uia_${randomUUID()}`
+      const id = `rbia_${randomUUID()}`
       await manager.execute(
         "insert into rbac_invitation_access (id, invite_id, email, actor_id, status) values (?, ?, ?, ?, 'pending')",
         [id, input.invite_id, input.email, actorId]
@@ -471,7 +471,7 @@ class AccessControlService extends MedusaService({
       for (const roleId of ids)
         await manager.execute(
           "insert into rbac_invitation_role (id, invitation_id, role_id) values (?, ?, ?)",
-          [`uir_${randomUUID()}`, id, roleId]
+          [`rbir_${randomUUID()}`, id, roleId]
         )
       after = { invite_id: input.invite_id, email: input.email, role_ids: ids }
     } else if (
@@ -544,7 +544,7 @@ class AccessControlService extends MedusaService({
       } else {
         await manager.execute(
           "insert into rbac_staff_access (id, user_id, active, version) values (?, ?, ?, 1)",
-          [`usa_${randomUUID()}`, input.user_id, input.active]
+          [`rbas_${randomUUID()}`, input.user_id, input.active]
         )
       }
       const [current] = await manager.execute<Staff[]>(
@@ -558,7 +558,7 @@ class AccessControlService extends MedusaService({
       for (const roleId of ids)
         await manager.execute(
           "insert into rbac_role_assignment (id, staff_id, role_id) values (?, ?, ?)",
-          [`ura_${randomUUID()}`, current.id, roleId]
+          [`rbra_${randomUUID()}`, current.id, roleId]
         )
       await this.ensureSuperuserRemains(manager)
       after = { ...current, role_ids: ids }
@@ -567,7 +567,7 @@ class AccessControlService extends MedusaService({
         invalid("The Superuser name is reserved for the system role")
       const permissions = this.validatePermissions(input.permissions)
       const rules = this.validateRules(input.rules)
-      targetId = `uar_${randomUUID()}`
+      targetId = `rbar_${randomUUID()}`
       ;[after] = await manager.execute(
         "insert into rbac_access_role (id, key, name, permissions, is_superuser, version, rules) values (?, ?, ?, ?::jsonb, false, 1, ?::jsonb) returning *",
         [
@@ -632,7 +632,13 @@ class AccessControlService extends MedusaService({
   ) {
     await manager.execute(
       "insert into rbac_access_audit (id, actor_id, action, target_id, detail) values (?, ?, ?, ?, ?::jsonb)",
-      [`uaa_${randomUUID()}`, actorId, action, targetId, JSON.stringify(detail)]
+      [
+        `rbaa_${randomUUID()}`,
+        actorId,
+        action,
+        targetId,
+        JSON.stringify(detail),
+      ]
     )
   }
 
@@ -662,19 +668,19 @@ class AccessControlService extends MedusaService({
         "Access has already been bootstrapped; use a Superuser to assign access"
       )
     }
-    const id = `uar_${randomUUID()}`
+    const id = `rbar_${randomUUID()}`
     await manager.execute(
       "insert into rbac_access_role (id, key, name, permissions, is_superuser, version) values (?, 'superuser', 'Superuser', ?::jsonb, true, 1)",
       [id, JSON.stringify(this.configuration.ids)]
     )
-    const staffId = `usa_${randomUUID()}`
+    const staffId = `rbas_${randomUUID()}`
     await manager.execute(
       "insert into rbac_staff_access (id, user_id, active, version) values (?, ?, true, 1)",
       [staffId, userId]
     )
     await manager.execute(
       "insert into rbac_role_assignment (id, staff_id, role_id) values (?, ?, ?)",
-      [`ura_${randomUUID()}`, staffId, id]
+      [`rbra_${randomUUID()}`, staffId, id]
     )
     await this.writeAudit(manager, userId, "bootstrap_superuser", userId, {
       role_id: id,

@@ -4,7 +4,7 @@ import StaffAccess from "./staff-access"
 
 export default model
   .define("rbac_role_assignment", {
-    id: model.id({ prefix: "ura" }).primaryKey(),
+    id: model.id({ prefix: "rbra" }).primaryKey(),
     staff: model.belongsTo(() => StaffAccess),
     role: model.belongsTo(() => AccessRole),
   })

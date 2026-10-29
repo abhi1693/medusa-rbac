@@ -1,5 +1,5 @@
 import { build } from "esbuild"
-import { readFile, writeFile } from "node:fs/promises"
+import { readFile } from "node:fs/promises"
 const pkg = JSON.parse(
   await readFile(new URL("../package.json", import.meta.url), "utf8")
 )
@@ -20,4 +20,3 @@ await build({
   splitting: true,
   outExtension: { ".js": ".mjs" },
 })
-// The Medusa compiler copies JSON inventories but does not preserve source type declarations.

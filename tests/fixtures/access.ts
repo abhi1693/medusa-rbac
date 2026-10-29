@@ -67,7 +67,7 @@ export const createInvitation = (overrides = {}) => ({
   ...overrides,
 })
 export const createInvitationAccess = (overrides = {}) => ({
-  id: "uia_test",
+  id: "rbia_test",
   invite_id: "inv_test",
   actor_id: "user",
   email: "invited@example.test",

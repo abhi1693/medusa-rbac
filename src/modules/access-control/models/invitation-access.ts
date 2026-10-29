@@ -1,7 +1,7 @@
 import { model } from "@medusajs/framework/utils"
 
 export default model.define("rbac_invitation_access", {
-  id: model.id({ prefix: "uia" }).primaryKey(),
+  id: model.id({ prefix: "rbia" }).primaryKey(),
   invite_id: model.text().unique(),
   email: model.text(),
   actor_id: model.text(),

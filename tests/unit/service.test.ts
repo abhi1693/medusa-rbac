@@ -129,7 +129,7 @@ describe("access service", () => {
       result: reader,
     })
     expect(h.execute.mock.calls[3][1]).toEqual([
-      expect.stringMatching(/^uar_/),
+      expect.stringMatching(/^rbar_/),
       expect.stringMatching(/^custom_/),
       "Reader",
       '["products.view"]',
