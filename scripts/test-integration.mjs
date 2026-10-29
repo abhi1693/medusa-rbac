@@ -86,6 +86,7 @@ try {
   created = true
   await run(["db:migrate"])
   await run(["exec", path.join(root, "tests/integration/actors.ts")])
+  await run(["exec", path.join(root, "tests/integration/invitations.ts")])
 } finally {
   if (created) await db.raw("drop database ?? with (force)", [name])
   await db.destroy()

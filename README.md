@@ -147,7 +147,7 @@ The role editor supports rule keys, allow/deny, priority and JSON context condit
 
 The public Admin SDK supports routes and widgets, but not replacing native invite hooks or the global error boundary. The optional Dashboard patch in `patches/` connects native invite forms, deletion and 403 handling to this plugin. Copy it into the host's `patches/` and apply with `patch-package`; merge it with any existing Dashboard patch. No app-specific aliases are needed.
 
-**The core-flows compensation patch is required on 2.22.1 when using managed invitations.** It fixes rollback of an Auth identity link after native user creation fails. Copy `patches/@medusajs+core-flows+2.22.1.patch` to the host and apply it with `patch-package`. Clean installations must fail if a required patch cannot apply. Review both patches and the native route/field snapshots when upgrading Medusa.
+The invitation workflow composes Medusa's public user-creation, invite-deletion and grouped-event steps with an Auth module identity-binding step. Failed acceptance restores the invite and actor association; grouped events are emitted only after workflow success.
 
 The plugin works independently of Admin Kit. A host can separately install [medusa-admin-kit](https://github.com/zanreal-labs/medusa-admin-kit) for its shared Catalog table and cross-plugin column registry; it does not replace the native extension constraints above.
 

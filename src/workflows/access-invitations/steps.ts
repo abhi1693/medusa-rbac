@@ -94,8 +94,64 @@ export const validateInvitationStep = createStep(
   validateInvitation
 )
 
+type IdentityBinding = {
+  auth_identity_id: string
+  user_id: string
+}
+
+export async function bindInvitationIdentity(
+  input: { auth_identity_id: string; user: UserDTO },
+  { container }: Execution
+) {
+  const auth = container.resolve<IAuthModuleService>(Modules.AUTH)
+  const identity = await auth.retrieveAuthIdentity(input.auth_identity_id)
+  const metadata = identity.app_metadata || {}
+  if (metadata.user_id != null)
+    throw new MedusaError(
+      MedusaError.Types.CONFLICT,
+      "This identity already belongs to a user"
+    )
+  await auth.updateAuthIdentities({
+    id: identity.id,
+    app_metadata: { ...metadata, user_id: input.user.id },
+  })
+  return new StepResponse(input.user, {
+    auth_identity_id: identity.id,
+    user_id: input.user.id,
+  } satisfies IdentityBinding)
+}
+
+export async function restoreInvitationIdentity(
+  receipt: IdentityBinding | undefined,
+  { container }: Execution
+) {
+  if (!receipt) return
+  const auth = container.resolve<IAuthModuleService>(Modules.AUTH)
+  const identity = await auth.retrieveAuthIdentity(receipt.auth_identity_id)
+  if (identity.app_metadata?.user_id !== receipt.user_id) return
+  // Auth metadata updates merge JSON. Explicit null removes only this workflow's actor binding.
+  await auth.updateAuthIdentities({
+    id: identity.id,
+    app_metadata: {
+      ...identity.app_metadata,
+      user_id: null,
+    },
+  })
+}
+
+export const bindInvitationIdentityStep = createStep(
+  "medusa-rbac-bind-invitation-identity",
+  bindInvitationIdentity,
+  restoreInvitationIdentity
+)
+
 export async function completeInvitation(
-  input: { invite_id: string; actor_id?: string; user: UserDTO },
+  input: {
+    invite_id: string
+    actor_id?: string
+    user: UserDTO
+    preparation?: unknown
+  },
   { container }: Execution
 ) {
   if (input.actor_id)

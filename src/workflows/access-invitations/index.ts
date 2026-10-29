@@ -1,16 +1,21 @@
 import {
   createWorkflow,
   WorkflowResponse,
+  parallelize,
 } from "@medusajs/framework/workflows-sdk"
+import { InviteWorkflowEvents } from "@medusajs/framework/utils"
 import {
   createInvitesWorkflow,
-  acceptInviteWorkflow,
+  createUsersWorkflow,
+  deleteInvitesStep,
+  emitEventStep,
   deleteInvitesWorkflow,
 } from "@medusajs/medusa/core-flows"
 import {
   MANAGED_INVITE,
   recordInvitationStep,
   validateInvitationStep,
+  bindInvitationIdentityStep,
   completeInvitationStep,
   cancelInvitationStep,
   type CreateAccessInvite,
@@ -39,21 +44,33 @@ export const acceptAccessInviteWorkflow = createWorkflow(
   "medusa-rbac-accept-access-invite",
   (input: AcceptAccessInvite) => {
     const validated = validateInvitationStep(input)
-    const users = acceptInviteWorkflow.runAsStep({
+    const users = createUsersWorkflow.runAsStep({
       input: {
-        invite_token: input.token,
-        auth_identity_id: input.auth_identity_id,
-        user: {
-          email: validated.invite.email,
-          first_name: input.user.first_name,
-          last_name: input.user.last_name,
-        },
+        users: [
+          {
+            email: validated.invite.email,
+            first_name: input.user.first_name,
+            last_name: input.user.last_name,
+          },
+        ],
       },
     })
+    const [user, deleted, event] = parallelize(
+      bindInvitationIdentityStep({
+        auth_identity_id: input.auth_identity_id,
+        user: users[0],
+      }),
+      deleteInvitesStep([validated.invite.id]),
+      emitEventStep({
+        eventName: InviteWorkflowEvents.ACCEPTED,
+        data: { id: validated.invite.id },
+      })
+    )
     const completed = completeInvitationStep({
       invite_id: validated.invite.id,
       actor_id: validated.actor_id,
-      user: users[0],
+      user,
+      preparation: { deleted, event },
     })
     return new WorkflowResponse(completed)
   }
