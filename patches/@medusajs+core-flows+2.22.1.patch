@@ -1,0 +1,23 @@
+diff --git a/node_modules/@medusajs/core-flows/dist/auth/steps/set-auth-app-metadata.js b/node_modules/@medusajs/core-flows/dist/auth/steps/set-auth-app-metadata.js
+index 7dbc24f..6e2a03f 100644
+--- a/node_modules/@medusajs/core-flows/dist/auth/steps/set-auth-app-metadata.js
++++ b/node_modules/@medusajs/core-flows/dist/auth/steps/set-auth-app-metadata.js
+@@ -42,7 +42,7 @@ exports.setAuthAppMetadataStep = (0, workflows_sdk_1.createStep)(exports.setAuth
+     const authIdentity = await service.retrieveAuthIdentity(data.authIdentityId);
+     const appMetadata = authIdentity.app_metadata || {};
+     // If the value is null, we are deleting the association with an actor
+-    if ((0, utils_1.isDefined)(appMetadata[key]) && data.value !== null) {
++    if (appMetadata[key] != null && data.value !== null) {
+         throw new Error(`Key ${key} already exists in app metadata`);
+     }
+     const oldValue = appMetadata[key];
+@@ -70,7 +70,8 @@ exports.setAuthAppMetadataStep = (0, workflows_sdk_1.createStep)(exports.setAuth
+         appMetadata[key] = oldValue;
+     }
+     else {
+-        delete appMetadata[key];
++        // Auth JSON fields merge on update; an omitted key preserves the old actor ID.
++        appMetadata[key] = null;
+     }
+     await service.updateAuthIdentities({
+         id: authIdentity.id,

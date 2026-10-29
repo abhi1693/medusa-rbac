@@ -1,0 +1,5 @@
+export { ACCESS_CONTROL } from "./modules/access-control"
+export { default as AccessControlService } from "./modules/access-control/service"
+export * from "./lib/access/permissions"
+export * from "./lib/access/config"
+export { requirePermission } from "./lib/access/middleware"

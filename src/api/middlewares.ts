@@ -1,0 +1,91 @@
+import {
+  defineMiddlewares,
+  authenticate,
+  validateAndTransformBody,
+  validateAndTransformQuery,
+} from "@medusajs/framework/http"
+import { enforceAdminAccess } from "./middlewares/enforce-admin-access"
+import { protectManagedInvites } from "./middlewares/protect-managed-invites"
+import {
+  deleteRoleInput,
+  roleInput,
+  staffInput,
+  updateRoleInput,
+  pageInput,
+  staffPageInput,
+  inviteInput,
+  acceptInviteInput,
+  acceptInviteQuery,
+} from "../lib/access/validators"
+
+export default defineMiddlewares({
+  routes: [
+    { matcher: /^\/admin(?:\/.*)?$/i, middlewares: [enforceAdminAccess] },
+    {
+      matcher: "/admin/access/invites",
+      method: "POST",
+      middlewares: [validateAndTransformBody(inviteInput)],
+    },
+    {
+      matcher: "/admin/invites/accept",
+      method: "POST",
+      middlewares: [protectManagedInvites],
+    },
+    {
+      matcher: "/admin/invites/:id",
+      method: "DELETE",
+      middlewares: [protectManagedInvites],
+    },
+    {
+      matcher: "/access/invites/accept",
+      method: "POST",
+      middlewares: [
+        authenticate("user", ["session", "bearer"], {
+          allowUnregistered: true,
+        }),
+        validateAndTransformBody(acceptInviteInput),
+        validateAndTransformQuery(acceptInviteQuery, {
+          defaults: [],
+          isList: false,
+        }),
+      ],
+    },
+    {
+      matcher: "/admin/access/audit",
+      method: "GET",
+      middlewares: [
+        validateAndTransformQuery(pageInput, { defaults: [], isList: true }),
+      ],
+    },
+    {
+      matcher: "/admin/access/staff",
+      method: "GET",
+      middlewares: [
+        validateAndTransformQuery(staffPageInput, {
+          defaults: [],
+          isList: true,
+        }),
+      ],
+    },
+    {
+      matcher: "/admin/access/roles",
+      method: "POST",
+      middlewares: [validateAndTransformBody(roleInput)],
+    },
+    {
+      matcher: "/admin/access/roles/:id",
+      method: "POST",
+      middlewares: [validateAndTransformBody(updateRoleInput)],
+    },
+    {
+      matcher: "/admin/access/roles/:id",
+      method: "DELETE",
+      middlewares: [validateAndTransformBody(deleteRoleInput)],
+    },
+    {
+      matcher: "/admin/access/staff/:id",
+      method: "POST",
+      middlewares: [validateAndTransformBody(staffInput)],
+    },
+  ],
+})

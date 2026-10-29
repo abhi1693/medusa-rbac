@@ -1,0 +1,116 @@
+{
+  "name": "@abhi1693/medusa-rbac",
+  "version": "0.1.0",
+  "description": "Configurable access control, roles and administration for Medusa v2",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abhi1693/medusa-rbac.git"
+  },
+  "engines": {
+    "node": ">=22.22.0"
+  },
+  "files": [
+    ".medusa/server",
+    "patches",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./.medusa/server/src/index.d.ts",
+      "default": "./.medusa/server/src/index.js"
+    },
+    "./admin": {
+      "import": "./.medusa/server/src/admin/index.mjs",
+      "require": "./.medusa/server/src/admin/index.js"
+    },
+    "./modules/access-control": "./.medusa/server/src/modules/access-control/index.js",
+    "./service": "./.medusa/server/src/modules/access-control/service.js",
+    "./permissions": "./.medusa/server/src/lib/access/permissions.js",
+    "./policy": "./.medusa/server/src/lib/access/policy.js",
+    "./bootstrap": "./.medusa/server/src/scripts/bootstrap-superuser.js",
+    "./middlewares": "./.medusa/server/src/api/middlewares.js",
+    "./*": "./.medusa/server/src/*.js",
+    "./admin/access": {
+      "types": "./.medusa/server/src/public/admin-access.d.ts",
+      "import": "./.medusa/server/public/admin-access.mjs",
+      "require": "./.medusa/server/src/public/admin-access.js"
+    },
+    "./admin/access-denied": {
+      "types": "./.medusa/server/src/public/access-denied.d.ts",
+      "import": "./.medusa/server/public/access-denied.mjs",
+      "require": "./.medusa/server/src/public/access-denied.js"
+    },
+    "./admin/invite-roles": {
+      "types": "./.medusa/server/src/public/invite-roles.d.ts",
+      "import": "./.medusa/server/public/invite-roles.mjs",
+      "require": "./.medusa/server/src/public/invite-roles.js"
+    },
+    "./admin/invites": {
+      "types": "./.medusa/server/src/public/invites.d.ts",
+      "import": "./.medusa/server/public/invites.mjs",
+      "require": "./.medusa/server/src/public/invites.js"
+    },
+    "./admin/users": {
+      "types": "./.medusa/server/src/public/users.d.ts",
+      "import": "./.medusa/server/public/users.mjs",
+      "require": "./.medusa/server/src/public/users.js"
+    },
+    "./.medusa/server/src/modules/*": "./.medusa/server/src/modules/*/index.js",
+    "./config": "./.medusa/server/src/lib/access/config.js",
+    "./require-permission": "./.medusa/server/src/lib/access/middleware.js"
+  },
+  "scripts": {
+    "build": "medusa plugin:build && node scripts/build-public.mjs",
+    "prepare": "npm run build",
+    "typecheck": "tsc --noEmit && tsc --project tsconfig.test.json",
+    "test": "vitest run --coverage",
+    "format": "prettier --write src tests scripts *.json *.mts",
+    "format:check": "prettier --check src tests scripts *.json *.mts",
+    "access:snapshot": "node scripts/snapshot-native-routes.mjs"
+  },
+  "peerDependencies": {
+    "@medusajs/admin-sdk": "^2.22.1",
+    "@medusajs/framework": "^2.22.1",
+    "@medusajs/icons": "^2.22.1",
+    "@medusajs/js-sdk": "^2.22.1",
+    "@medusajs/medusa": "^2.22.1",
+    "@medusajs/ui": "^4.2.8",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@tanstack/react-query": "^5.64.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@swc/core": "^1.15.0",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.8",
+    "@types/node": "^24.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitest/coverage-v8": "4.1.12",
+    "jsdom": "30.1.3",
+    "prettier": "3.9.10",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vite": "7.3.6",
+    "vitest": "4.1.12",
+    "@medusajs/admin-sdk": "2.22.1",
+    "@medusajs/cli": "2.22.1",
+    "@medusajs/draft-order": "2.22.1",
+    "@medusajs/framework": "2.22.1",
+    "@medusajs/icons": "2.22.1",
+    "@medusajs/js-sdk": "2.22.1",
+    "@medusajs/medusa": "2.22.1",
+    "@medusajs/ui": "4.2.8",
+    "@tanstack/react-query": "5.64.2",
+    "esbuild": "0.28.2"
+  }
+}
