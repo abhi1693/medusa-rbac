@@ -216,3 +216,21 @@ it("allows reviewed native variant summaries while denying unrelated product exp
     false
   )
 })
+
+it("applies contextual deny rules through the public policy helper", () => {
+  const principal = createPrincipal({
+    is_superuser: false,
+    permissions: ["orders.view"],
+    rules: [
+      {
+        permission: "orders.view",
+        effect: "deny",
+        priority: 1,
+        conditions: { region_id: "blocked" },
+      },
+    ],
+  })
+  const policy = policyFor("GET", "/admin/orders")!
+  expect(can(principal, policy, { region_id: "blocked" })).toBe(false)
+  expect(can(principal, policy, { region_id: "allowed" })).toBe(true)
+})

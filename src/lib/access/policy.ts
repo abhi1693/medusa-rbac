@@ -1,3 +1,4 @@
+import { evaluatePermission, type PermissionContext } from "./config"
 import nativeRoutes from "./native-routes.json"
 import nativeFields from "./native-fields.json"
 import type { Permission, AccessPrincipal } from "./permissions"
@@ -248,11 +249,15 @@ export function isSelfProfileUpdate(
   )
 }
 
-export function can(principal: AccessPrincipal, policy: Policy): boolean {
+export function can(
+  principal: AccessPrincipal,
+  policy: Policy,
+  context: PermissionContext = {}
+): boolean {
   return (
     principal.active &&
     (!policy.superuser || principal.is_superuser) &&
-    policy.permissions.every((p) => principal.permissions.includes(p))
+    policy.permissions.every((p) => evaluatePermission(principal, p, context))
   )
 }
 
