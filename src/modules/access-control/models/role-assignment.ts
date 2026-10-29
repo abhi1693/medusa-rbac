@@ -1,11 +1,11 @@
 import { model } from "@medusajs/framework/utils"
 import AccessRole from "./access-role"
-import StaffAccess from "./staff-access"
+import ActorAccess from "./actor-access"
 
 export default model
   .define("rbac_role_assignment", {
     id: model.id({ prefix: "rbra" }).primaryKey(),
-    staff: model.belongsTo(() => StaffAccess),
+    access: model.belongsTo(() => ActorAccess),
     role: model.belongsTo(() => AccessRole),
   })
-  .indexes([{ on: ["staff_id", "role_id"], unique: true }])
+  .indexes([{ on: ["access_id", "role_id"], unique: true }])

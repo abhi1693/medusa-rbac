@@ -8,7 +8,7 @@ import { sdk, accessFingerprint } from "../../src/admin/lib/access"
 
 import { createPrincipal } from "../fixtures/access"
 const principal = createPrincipal({
-  user_id: "test_user",
+  actor_id: "test_user",
   is_superuser: false,
   role_ids: ["reader"],
   permissions: ["orders.view"],

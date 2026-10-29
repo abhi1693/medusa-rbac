@@ -3,3 +3,7 @@ export { default as AccessControlService } from "./modules/access-control/servic
 export * from "./lib/access/permissions"
 export * from "./lib/access/config"
 export { requirePermission } from "./lib/access/middleware"
+export type {
+  ActorReference,
+  ActorAccessRecord,
+} from "./modules/access-control/service"

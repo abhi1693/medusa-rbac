@@ -58,7 +58,8 @@ export function validatePermissions(
 }
 
 export type AccessPrincipal = {
-  user_id: string
+  actor_id: string
+  actor_type: string
   active: boolean
   is_superuser: boolean
   role_ids: string[]

@@ -120,7 +120,8 @@ export function useAccess() {
 
 export function accessFingerprint(access: AccessPrincipal) {
   return JSON.stringify([
-    access.user_id,
+    access.actor_id,
+    access.actor_type,
     access.active,
     access.is_superuser,
     [...access.role_ids].sort(),

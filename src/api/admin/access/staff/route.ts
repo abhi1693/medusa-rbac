@@ -23,7 +23,7 @@ export async function GET(
   const { staff, roles } = await access.snapshot(page.map((user) => user.id))
   res.json({
     staff: page.map((user) => {
-      const assigned = staff.find((entry) => entry.user_id === user.id)
+      const assigned = staff.find((entry) => entry.actor_id === user.id)
       return {
         ...user,
         roles: roles

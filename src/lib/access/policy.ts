@@ -165,6 +165,11 @@ export function normalizedPath(url: string): string | null {
 export function policyFor(method: string, path: string): Policy | null {
   const verb = method === "HEAD" ? "GET" : method
   if (verb === "GET" && bootstrapReads.has(path)) return read()
+  if (
+    ["GET", "POST"].includes(verb) &&
+    /^\/admin\/access\/actors\/[a-z][a-z0-9_]*\/[^/]+$/.test(path)
+  )
+    return { permissions: [], superuser: true }
   if (verb === "GET" && path === "/admin/access/roles")
     return read("roles.view")
   if (verb === "GET" && /^\/admin\/access\/staff(?:\/[^/]+)?$/.test(path))

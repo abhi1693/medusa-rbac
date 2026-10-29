@@ -30,7 +30,7 @@ export type AccessControlOptions = {
   /** Resolvers for custom APIs only. The Admin API always requires a native user. */
   actors?: {
     type: string
-    resolve: (id: string, request: MedusaRequest) => Promise<AccessPrincipal>
+    validate: (id: string, request: MedusaRequest) => Promise<void>
   }[]
 }
 
@@ -78,9 +78,16 @@ export function createAccessConfig(options: AccessControlOptions = {}) {
   const actors = options.actors || []
   if (
     new Set(actors.map((actor) => actor.type)).size !== actors.length ||
-    actors.some((actor) => !actor.type || actor.type === "user")
+    actors.some(
+      (actor) =>
+        !actor.type ||
+        ["user", "customer"].includes(actor.type) ||
+        typeof actor.validate !== "function"
+    )
   )
-    throw new Error("Actor resolvers must have unique types other than user")
+    throw new Error(
+      "Actor resolvers must have unique types other than user and customer"
+    )
   return {
     permissions,
     ids: [...ids],

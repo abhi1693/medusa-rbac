@@ -4,7 +4,7 @@ Reusable access control for Medusa v2. Define permissions for your own modules, 
 
 **Superuser is the only built-in role.** Bootstrap explicitly assigns it to a chosen native Medusa user. No operational roles are created at installation, startup or bootstrap. Create all other roles through Admin or the API.
 
-Targets Medusa **2.22.1**, without enabling native Enterprise RBAC. The architecture takes inspiration from [medusa-permissions](https://github.com/tax1driver/medusa-permissions); this is an independent implementation.
+Targets Medusa **2.22.1**, without enabling native Enterprise RBAC.
 
 ## Install
 
@@ -66,7 +66,7 @@ Open **Settings → Access management**. Create roles, select permissions or sco
 | `permissions`      | Additional `[identifier, label, group]` definitions. Duplicate or invalid identifiers fail startup. Native identifiers remain registered.                                                               |
 | `routes`           | Explicit method/path policies for custom Admin APIs. Paths support named segments such as `:id`; `HEAD` uses the corresponding `GET` policy. Require every listed permission, or set `superuser: true`. |
 | `contextResolvers` | Async functions deriving rule context from trusted application data. Actor identity, method and route remain server-owned.                                                                              |
-| `actors`           | `{ type, resolve(id, request) }` providers for custom APIs. Native user resolution is built in; other actor types never gain access to the Admin API.                                                   |
+| `actors`           | `{ type, validate(id, request) }` identity providers for custom actor types. Native users and customers are validated through Medusa’s User and Customer modules.                                       |
 
 A custom API outside `/admin` can use the exported middleware after Medusa authentication:
 
@@ -91,6 +91,23 @@ export default defineMiddlewares({
 Use the module's `allows(principal, permission, context)` for application workflow/service checks. HTTP middleware does not automatically authorize jobs, scripts or workflows invoked outside HTTP; those callers must establish an actor and check permissions themselves.
 
 The module token is `ACCESS_CONTROL` from `@abhi1693/medusa-rbac/modules/access-control`; its service type is exported from `@abhi1693/medusa-rbac/service`. Public browser helpers and native adapters are under `@abhi1693/medusa-rbac/admin/{access,access-denied,invite-roles,invites,users}`.
+
+## Admin and storefront actors
+
+Assignments are keyed by both `actor_type` and `actor_id`. Admin users and storefront customers share the permission engine while retaining separate identity and access records. Custom actor types can register an identity validator backed by their owning module.
+
+Admin APIs require a native `user` identity. The protected Superuser role can only be assigned to admin users. Customer credentials cannot gain Admin access through role assignments, and an identifier reused across actor types does not share grants.
+
+Use `GET` or `POST /admin/access/actors/:actor_type/:id` to inspect or update an actor's assignments as a Superuser. Writes require `role_ids`, `active` and the current `version`. Validate storefront routes with Medusa authentication before checking a registered storefront permission:
+
+```ts
+middlewares: [
+  authenticate("customer", ["session", "bearer"]),
+  requirePermission("store.documents.read"),
+]
+```
+
+The module exposes `actorPrincipal({ type, id })`, `actorAccess({ type, id })` and the `set_actor` mutation for backend workflows. Native commerce Store APIs retain their normal behavior unless an application explicitly adds permission enforcement.
 
 ## Permission rules
 

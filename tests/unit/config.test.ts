@@ -92,13 +92,13 @@ it("rejects duplicate routes and actor resolvers", () => {
   expect(() =>
     createAccessConfig({ permissions: [permission], routes: [route, route] })
   ).toThrow("duplicate")
-  const resolve = async () => ordinary
+  const validate = async () => {}
   for (const actors of [
-    [{ type: "user", resolve }],
-    [{ type: "", resolve }],
+    [{ type: "user", validate }],
+    [{ type: "", validate }],
     [
-      { type: "customer", resolve },
-      { type: "customer", resolve },
+      { type: "vendor", validate },
+      { type: "vendor", validate },
     ],
   ])
     expect(() => createAccessConfig({ actors })).toThrow("Actor resolvers")
@@ -255,7 +255,7 @@ it("resolves actors and trusted request context through configured module option
     contextResolvers: [
       async () => ({ sales_channel_id: "retail", actor_id: "forged" }),
     ],
-    actors: [{ type: "customer", resolve: async () => ordinary }],
+    actors: [{ type: "vendor", validate: async () => {} }],
   })
   expect(access.permissionDefinitions()).toContainEqual(permission)
   expect(access.validatePermissions([permission[0], permission[0]])).toEqual([
@@ -275,15 +275,16 @@ it("resolves actors and trusted request context through configured module option
     },
     originalUrl: "/documents/one?secret=omitted",
     method: "GET",
-    auth_context: { actor_type: "customer", actor_id: "customer_1" },
+    auth_context: { actor_type: "vendor", actor_id: "vendor_1" },
   } as any
   expect(await access.permissionContext(req)).toEqual({
     sales_channel_id: "retail",
-    actor_id: "customer_1",
-    actor_type: "customer",
+    actor_id: "vendor_1",
+    actor_type: "vendor",
     route: "/documents/one",
     method: "GET",
   })
+  vi.spyOn(access, "actorPrincipal").mockResolvedValue(ordinary)
   expect(await access.principalForRequest(req)).toEqual(ordinary)
   expect(
     await access.principalForRequest({
@@ -297,14 +298,17 @@ it("resolves actors and trusted request context through configured module option
   expect(
     await access.permissionContext({ ...req, auth_context: undefined })
   ).toMatchObject({ actor_id: null, actor_type: null })
-  vi.spyOn(access, "principal").mockResolvedValue(ordinary)
+  vi.spyOn(access, "actorPrincipal").mockResolvedValue(ordinary)
   expect(
     await access.principalForRequest({
       ...req,
       auth_context: { actor_type: "user", actor_id: "user_1" },
     })
   ).toEqual(ordinary)
-  expect(access.principal).toHaveBeenCalledWith("user_1")
+  expect(access.actorPrincipal).toHaveBeenCalledWith({
+    type: "user",
+    id: "user_1",
+  })
   expect(access.allows(createPrincipal(), "unknown.read")).toBe(false)
   expect(access.allows(createPrincipal(), permission[0])).toBe(true)
 })

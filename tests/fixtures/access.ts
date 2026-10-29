@@ -25,7 +25,8 @@ export const createSuperuserRole = (overrides: Partial<Role> = {}): Role =>
 export const createPrincipal = (
   overrides: Partial<AccessPrincipal> = {}
 ): AccessPrincipal => ({
-  user_id: "user",
+  actor_id: "user",
+  actor_type: "user",
   active: true,
   is_superuser: true,
   role_ids: ["admin"],
@@ -34,7 +35,8 @@ export const createPrincipal = (
 })
 export const createStaffAccess = () => ({
   id: "staff",
-  user_id: "user",
+  actor_id: "user",
+  actor_type: "user",
   active: true,
   version: 1,
 })
@@ -81,7 +83,7 @@ export const invitationEmail = (label: string) => `invite-${label}@example.test`
 export const createUserDeletion = (overrides = {}) => ({
   actor_id: "user",
   user_id: "target",
-  staff_id: "staff",
+  access_id: "staff",
   version: 2,
   previous_active: true as boolean | null,
   role_ids: ["reader"],

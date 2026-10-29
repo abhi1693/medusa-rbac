@@ -16,10 +16,14 @@ import {
   MedusaService,
   Modules,
 } from "@medusajs/framework/utils"
-import type { IUserModuleService, Context } from "@medusajs/framework/types"
+import type {
+  IUserModuleService,
+  ICustomerModuleService,
+  Context,
+} from "@medusajs/framework/types"
 import type { EntityManager } from "@medusajs/framework/mikro-orm/knex"
 import AccessRole from "./models/access-role"
-import StaffAccess from "./models/staff-access"
+import ActorAccess from "./models/actor-access"
 import AccessAudit from "./models/access-audit"
 import RoleAssignment from "./models/role-assignment"
 import InvitationAccess from "./models/invitation-access"
@@ -39,9 +43,10 @@ type Role = {
   is_superuser: boolean
   version: number
 }
-type Staff = {
+export type ActorAccessRecord = {
   id: string
-  user_id: string
+  actor_id: string
+  actor_type: string
   active: boolean
   role_ids: string[]
   version: number
@@ -50,11 +55,12 @@ type Staff = {
 export type UserDeletion = {
   actor_id: string
   user_id: string
-  staff_id: string
+  access_id: string
   version: number
   previous_active: boolean | null
   role_ids: string[]
 }
+export type ActorReference = { id: string; type: string }
 type Mutation =
   | {
       kind: "record_invite"
@@ -80,6 +86,13 @@ type Mutation =
     }
   | { kind: "delete_role"; id: string; version: number }
   | {
+      kind: "set_actor"
+      actor: ActorReference
+      role_ids: string[]
+      active: boolean
+      version: number
+    }
+  | {
       kind: "set_staff"
       user_id: string
       role_ids: string[]
@@ -102,7 +115,7 @@ const conflict = (): never => {
 
 class AccessControlService extends MedusaService({
   AccessRole,
-  StaffAccess,
+  ActorAccess,
   AccessAudit,
   RoleAssignment,
   InvitationAccess,
@@ -154,21 +167,62 @@ class AccessControlService extends MedusaService({
       method: request.method,
     }
   }
+  async validateActor(
+    actor: ActorReference,
+    request: MedusaRequest
+  ): Promise<void> {
+    if (actor.type === "user") {
+      await request.scope
+        .resolve<IUserModuleService>(Modules.USER)
+        .retrieveUser(actor.id, { select: ["id"] })
+    } else if (actor.type === "customer") {
+      await request.scope
+        .resolve<ICustomerModuleService>(Modules.CUSTOMER)
+        .retrieveCustomer(actor.id, { select: ["id"] })
+    } else {
+      const provider = this.configuration.actors.find(
+        (provider) => provider.type === actor.type
+      )
+      if (!provider) return invalid("Unknown actor type")
+      await provider.validate(actor.id, request)
+    }
+  }
   async principalForRequest(
     request: MedusaRequest
   ): Promise<AccessPrincipal | null> {
     const auth = (request as any).auth_context
-    if (!auth?.actor_id) return null
-    if (auth.actor_type === "user") {
-      await request.scope
-        .resolve<IUserModuleService>(Modules.USER)
-        .retrieveUser(auth.actor_id, { select: ["id"] })
-      return this.principal(auth.actor_id)
-    }
-    const actor = this.configuration.actors.find(
-      (actor) => actor.type === auth.actor_type
+    if (
+      !auth?.actor_id ||
+      ![
+        "user",
+        "customer",
+        ...this.configuration.actors.map((actor) => actor.type),
+      ].includes(auth.actor_type)
     )
-    return actor ? actor.resolve(auth.actor_id, request) : null
+      return null
+    const actor = { type: auth.actor_type, id: auth.actor_id }
+    await this.validateActor(actor, request)
+    return this.actorPrincipal(actor)
+  }
+  @InjectManager()
+  async actorAccess(
+    actor: ActorReference,
+    @MedusaContext() context?: Context<EntityManager>
+  ) {
+    const manager = context!.transactionManager || context!.manager!
+    const [access] = await manager.execute<ActorAccessRecord[]>(
+      "select s.*, coalesce((select jsonb_agg(a.role_id order by a.role_id) from rbac_role_assignment a where a.access_id = s.id and a.deleted_at is null), '[]'::jsonb) as role_ids from rbac_actor_access s where s.actor_type = ? and s.actor_id = ? and s.deleted_at is null",
+      [actor.type, actor.id]
+    )
+    return (
+      access || {
+        actor_type: actor.type,
+        actor_id: actor.id,
+        active: false,
+        role_ids: [],
+        version: 0,
+      }
+    )
   }
   allows(
     principal: AccessPrincipal,
@@ -203,21 +257,21 @@ class AccessControlService extends MedusaService({
         MedusaError.Types.NOT_ALLOWED,
         "You cannot delete your own account"
       )
-    const [staff] = await manager.execute<Staff[]>(
-      "select * from rbac_staff_access where user_id = ? order by created_at desc limit 1",
+    const [staff] = await manager.execute<ActorAccessRecord[]>(
+      "select * from rbac_actor_access where actor_id = ? and actor_type = 'user' order by created_at desc limit 1",
       [userId]
     )
     if (staff?.deleted_at) conflict()
     const assignments = staff
       ? await manager.execute<{ role_id: string }[]>(
-          "select role_id from rbac_role_assignment where staff_id = ? and deleted_at is null",
+          "select role_id from rbac_role_assignment where access_id = ? and deleted_at is null",
           [staff.id]
         )
       : []
     const deletion: UserDeletion = {
       actor_id: actorId,
       user_id: userId,
-      staff_id: staff ? staff.id : `rbas_${randomUUID()}`,
+      access_id: staff ? staff.id : `rbas_${randomUUID()}`,
       version: staff ? staff.version + 1 : 1,
       previous_active: staff ? staff.active : null,
       role_ids: assignments.map((assignment) => assignment.role_id),
@@ -225,13 +279,13 @@ class AccessControlService extends MedusaService({
     // Archive before the native workflow runs. This also blocks concurrent role assignment.
     if (staff)
       await manager.execute(
-        "update rbac_staff_access set active = false, deleted_at = now(), updated_at = now(), version = version + 1 where id = ?",
+        "update rbac_actor_access set active = false, deleted_at = now(), updated_at = now(), version = version + 1 where id = ?",
         [staff.id]
       )
     else
       await manager.execute(
-        "insert into rbac_staff_access (id, user_id, active, version, deleted_at) values (?, ?, false, 1, now())",
-        [deletion.staff_id, userId]
+        "insert into rbac_actor_access (id, actor_type, actor_id, active, version, deleted_at) values (?, 'user', ?, false, 1, now())",
+        [deletion.access_id, userId]
       )
     await this.ensureSuperuserRemains(manager)
     await this.writeAudit(
@@ -261,36 +315,37 @@ class AccessControlService extends MedusaService({
   ) {
     const manager = context!.transactionManager!
     await manager.execute("select pg_advisory_xact_lock(718231910)")
-    const [staff] = await manager.execute<Staff[]>(
-      "select * from rbac_staff_access where id = ?",
-      [deletion.staff_id]
+    const [staff] = await manager.execute<ActorAccessRecord[]>(
+      "select * from rbac_actor_access where id = ?",
+      [deletion.access_id]
     )
     if (
       !staff ||
       !staff.deleted_at ||
       staff.version !== deletion.version ||
-      staff.user_id !== deletion.user_id
+      staff.actor_id !== deletion.user_id ||
+      staff.actor_type !== "user"
     ) {
       if (outcome === "restore") return
       conflict()
     }
     if (outcome === "restore") {
       if (deletion.previous_active === null)
-        await manager.execute("delete from rbac_staff_access where id = ?", [
+        await manager.execute("delete from rbac_actor_access where id = ?", [
           staff.id,
         ])
       else
         await manager.execute(
-          "update rbac_staff_access set active = ?, deleted_at = null, version = version + 1, updated_at = now() where id = ?",
+          "update rbac_actor_access set active = ?, deleted_at = null, version = version + 1, updated_at = now() where id = ?",
           [deletion.previous_active, staff.id]
         )
     } else {
       await manager.execute(
-        "delete from rbac_role_assignment where staff_id = ?",
+        "delete from rbac_role_assignment where access_id = ?",
         [staff.id]
       )
       await manager.execute(
-        "update rbac_staff_access set version = version + 1, updated_at = now() where id = ?",
+        "update rbac_actor_access set version = version + 1, updated_at = now() where id = ?",
         [staff.id]
       )
     }
@@ -312,7 +367,7 @@ class AccessControlService extends MedusaService({
 
   private async ensureSuperuserRemains(manager: EntityManager) {
     const [remaining] = await manager.execute<{ count: string }[]>(
-      "select count(distinct s.id) as count from rbac_staff_access s join rbac_role_assignment a on a.staff_id = s.id join rbac_access_role r on r.id = a.role_id where s.active = true and s.deleted_at is null and a.deleted_at is null and r.deleted_at is null and r.is_superuser = true"
+      "select count(distinct s.id) as count from rbac_actor_access s join rbac_role_assignment a on a.access_id = s.id join rbac_access_role r on r.id = a.role_id where s.actor_type = 'user' and s.active = true and s.deleted_at is null and a.deleted_at is null and r.deleted_at is null and r.is_superuser = true"
     )
     if (Number(remaining.count) === 0)
       invalid("At least one active Superuser must remain")
@@ -341,6 +396,18 @@ class AccessControlService extends MedusaService({
     return invitation
   }
   @InjectManager()
+  async actorPrincipal(
+    actor: ActorReference,
+    @MedusaContext() context?: Context<EntityManager>
+  ): Promise<AccessPrincipal> {
+    return this.principalWithManager(
+      actor.id,
+      context!.transactionManager || context!.manager!,
+      actor.type
+    )
+  }
+
+  @InjectManager()
   async principal(
     userId: string,
     @MedusaContext() context?: Context<EntityManager>
@@ -353,26 +420,32 @@ class AccessControlService extends MedusaService({
 
   private async principalWithManager(
     userId: string,
-    manager: EntityManager
+    manager: EntityManager,
+    actorType = "user"
   ): Promise<AccessPrincipal> {
-    const [staff] = await manager.execute<Staff[]>(
-      "select * from rbac_staff_access where user_id = ? and deleted_at is null",
-      [userId]
+    const [subject] = await manager.execute<ActorAccessRecord[]>(
+      "select * from rbac_actor_access where actor_id = ? and actor_type = ? and deleted_at is null",
+      [userId, actorType]
     )
-    if (!staff?.active)
+    if (!subject?.active)
       return {
-        user_id: userId,
+        actor_id: userId,
+        actor_type: actorType,
         active: false,
         is_superuser: false,
         role_ids: [],
         permissions: [],
       }
-    const assigned = await manager.execute<Role[]>(
-      "select r.* from rbac_access_role r join rbac_role_assignment a on a.role_id = r.id where a.staff_id = ? and a.deleted_at is null and r.deleted_at is null",
-      [staff.id]
+    const persisted = await manager.execute<Role[]>(
+      "select r.* from rbac_access_role r join rbac_role_assignment a on a.role_id = r.id where a.access_id = ? and a.deleted_at is null and r.deleted_at is null",
+      [subject.id]
+    )
+    const assigned = persisted.filter(
+      (role) => actorType === "user" || !role.is_superuser
     )
     return {
-      user_id: userId,
+      actor_id: userId,
+      actor_type: actorType,
       active: true,
       ...(assigned.some((r) => r.rules?.length)
         ? {
@@ -406,8 +479,8 @@ class AccessControlService extends MedusaService({
         "select * from rbac_access_role where deleted_at is null order by is_superuser desc, name"
       ),
       staff: userIds.length
-        ? await manager.execute<Staff[]>(
-            "select s.*, coalesce((select jsonb_agg(a.role_id order by a.role_id) from rbac_role_assignment a where a.staff_id = s.id and a.deleted_at is null), '[]'::jsonb) as role_ids from rbac_staff_access s where s.deleted_at is null and s.user_id in (select jsonb_array_elements_text(?::jsonb)) order by s.created_at, s.id",
+        ? await manager.execute<ActorAccessRecord[]>(
+            "select s.*, coalesce((select jsonb_agg(a.role_id order by a.role_id) from rbac_role_assignment a where a.access_id = s.id and a.deleted_at is null), '[]'::jsonb) as role_ids from rbac_actor_access s where s.actor_type = 'user' and s.deleted_at is null and s.actor_id in (select jsonb_array_elements_text(?::jsonb)) order by s.created_at, s.id",
             [JSON.stringify(userIds)]
           )
         : [],
@@ -513,51 +586,69 @@ class AccessControlService extends MedusaService({
         "delete from rbac_invitation_role where invitation_id = ?",
         [invitation.id]
       )
-    } else if (input.kind === "set_staff") {
+    } else if (input.kind === "set_staff" || input.kind === "set_actor") {
+      const target =
+        input.kind === "set_staff"
+          ? { type: "user", id: input.user_id }
+          : input.actor
+      if (
+        ![
+          "user",
+          "customer",
+          ...this.configuration.actors.map((actor) => actor.type),
+        ].includes(target.type) ||
+        !target.id
+      )
+        invalid("Unknown actor type or identifier")
       const ids = [...new Set(input.role_ids)]
       const roles = await manager.execute<Role[]>(
         "select * from rbac_access_role where deleted_at is null"
       )
       if (ids.some((id) => !roles.some((r) => r.id === id)))
         invalid("Unknown role")
-      const [staff] = await manager.execute<Staff[]>(
-        "select * from rbac_staff_access where user_id = ? order by created_at desc limit 1",
-        [input.user_id]
+      if (
+        target.type !== "user" &&
+        roles.some((role) => role.is_superuser && ids.includes(role.id))
       )
-      if (staff?.deleted_at) conflict()
-      if ((staff?.version || 0) !== input.version) conflict()
-      const previousAssignments = staff
+        forbidden("Superuser can only be assigned to admin users")
+      const [subject] = await manager.execute<ActorAccessRecord[]>(
+        "select * from rbac_actor_access where actor_id = ? and actor_type = ? order by created_at desc limit 1",
+        [target.id, target.type]
+      )
+      if (subject?.deleted_at) conflict()
+      if ((subject?.version || 0) !== input.version) conflict()
+      const previousAssignments = subject
         ? await manager.execute<{ role_id: string }[]>(
-            "select role_id from rbac_role_assignment where staff_id = ? and deleted_at is null",
-            [staff.id]
+            "select role_id from rbac_role_assignment where access_id = ? and deleted_at is null",
+            [subject.id]
           )
         : []
-      before = staff
-        ? { ...staff, role_ids: previousAssignments.map((a) => a.role_id) }
+      before = subject
+        ? { ...subject, role_ids: previousAssignments.map((a) => a.role_id) }
         : null
-      targetId = input.user_id
-      if (staff) {
+      targetId = target.id
+      if (subject) {
         await manager.execute(
-          "update rbac_staff_access set active = ?, version = version + 1, updated_at = now() where id = ?",
-          [input.active, staff.id]
+          "update rbac_actor_access set active = ?, version = version + 1, updated_at = now() where id = ?",
+          [input.active, subject.id]
         )
       } else {
         await manager.execute(
-          "insert into rbac_staff_access (id, user_id, active, version) values (?, ?, ?, 1)",
-          [`rbas_${randomUUID()}`, input.user_id, input.active]
+          "insert into rbac_actor_access (id, actor_type, actor_id, active, version) values (?, ?, ?, ?, 1)",
+          [`rbas_${randomUUID()}`, target.type, target.id, input.active]
         )
       }
-      const [current] = await manager.execute<Staff[]>(
-        "select * from rbac_staff_access where user_id = ? and deleted_at is null",
-        [input.user_id]
+      const [current] = await manager.execute<ActorAccessRecord[]>(
+        "select * from rbac_actor_access where actor_id = ? and actor_type = ? and deleted_at is null",
+        [target.id, target.type]
       )
       await manager.execute(
-        "delete from rbac_role_assignment where staff_id = ?",
+        "delete from rbac_role_assignment where access_id = ?",
         [current.id]
       )
       for (const roleId of ids)
         await manager.execute(
-          "insert into rbac_role_assignment (id, staff_id, role_id) values (?, ?, ?)",
+          "insert into rbac_role_assignment (id, access_id, role_id) values (?, ?, ?)",
           [`rbra_${randomUUID()}`, current.id, roleId]
         )
       await this.ensureSuperuserRemains(manager)
@@ -675,11 +766,11 @@ class AccessControlService extends MedusaService({
     )
     const staffId = `rbas_${randomUUID()}`
     await manager.execute(
-      "insert into rbac_staff_access (id, user_id, active, version) values (?, ?, true, 1)",
+      "insert into rbac_actor_access (id, actor_type, actor_id, active, version) values (?, 'user', ?, true, 1)",
       [staffId, userId]
     )
     await manager.execute(
-      "insert into rbac_role_assignment (id, staff_id, role_id) values (?, ?, ?)",
+      "insert into rbac_role_assignment (id, access_id, role_id) values (?, ?, ?)",
       [`rbra_${randomUUID()}`, staffId, id]
     )
     await this.writeAudit(manager, userId, "bootstrap_superuser", userId, {

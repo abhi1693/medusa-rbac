@@ -23,7 +23,7 @@ import fieldInventory from "../src/lib/access/native-fields.json"
 const nativeRequire = createRequire(path.join(process.cwd(), "package.json"))
 
 const principal = createPrincipal({
-  user_id: "user_test",
+  actor_id: "user_test",
   is_superuser: false,
   role_ids: ["role_test"],
   permissions: ["products.view", "prices.view"],

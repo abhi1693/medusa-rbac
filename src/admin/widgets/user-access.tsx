@@ -16,13 +16,13 @@ const UserAccess = ({ data: user }: DetailWidgetProps<HttpTypes.AdminUser>) => {
   )
   const [editing, setEditing] = useState(false)
   const staff = useQuery({
-    queryKey: ["medusa-rbac", access.data?.access.user_id, "staff", user.id],
+    queryKey: ["medusa-rbac", access.data?.access.actor_id, "staff", user.id],
     queryFn: () => accessApi.staffUser(user.id),
     enabled: superuser,
     retry: false,
   })
   const roles = useQuery({
-    queryKey: ["medusa-rbac", access.data?.access.user_id, "roles"],
+    queryKey: ["medusa-rbac", access.data?.access.actor_id, "roles"],
     queryFn: accessApi.roles,
     enabled: superuser,
     retry: false,

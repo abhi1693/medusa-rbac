@@ -125,7 +125,8 @@ it("checks sensitive writes at native envelope boundaries only", () => {
   expect(
     can(
       {
-        user_id: "u",
+        actor_id: "u",
+        actor_type: "user",
         active: true,
         is_superuser: true,
         role_ids: [],
@@ -176,7 +177,8 @@ it("validates strict request bodies and pagination bounds", () => {
 
 it("orders.view authorizes order reads without granting customer or payment directory access", () => {
   const principal = {
-    user_id: "user",
+    actor_id: "user",
+    actor_type: "user",
     active: true,
     is_superuser: false,
     role_ids: ["orders_reader"],

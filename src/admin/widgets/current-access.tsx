@@ -10,9 +10,9 @@ const CurrentAccess = () => {
   const client = useQueryClient()
   const navigate = useNavigate()
   const profile = useQuery({
-    queryKey: ["medusa-rbac", access.data?.access.user_id, "profile"],
+    queryKey: ["medusa-rbac", access.data?.access.actor_id, "profile"],
     queryFn: accessApi.profile,
-    enabled: Boolean(access.data?.access.user_id),
+    enabled: Boolean(access.data?.access.actor_id),
     retry: false,
   })
   const logout = useMutation({

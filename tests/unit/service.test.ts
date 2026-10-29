@@ -1,3 +1,4 @@
+import { createAccessConfig } from "../../src/lib/access/config"
 import { describe, it, expect, vi } from "vitest"
 import AccessControlService from "../../src/modules/access-control/service"
 import moduleDefinition from "../../src/modules/access-control"
@@ -39,7 +40,8 @@ describe("access service", () => {
     async ({ rows }) => {
       const h = harness(rows)
       expect(await h.service.principal("user", h.context)).toEqual({
-        user_id: "user",
+        actor_id: "user",
+        actor_type: "user",
         active: false,
         is_superuser: false,
         role_ids: [],
@@ -62,7 +64,8 @@ describe("access service", () => {
       ]
     )
     expect(await h.service.principal("user", h.context)).toEqual({
-      user_id: "user",
+      actor_id: "user",
+      actor_type: "user",
       active: true,
       is_superuser: true,
       role_ids: ["reader", "other", "admin"],
@@ -505,7 +508,7 @@ it("prevents self-deletion before touching the account", async () => {
   expect(h.execute).toHaveBeenCalledTimes(3)
 })
 it("prepares assigned staff deletion under the superuser lock", async () => {
-  const target = { ...staff, user_id: "target" }
+  const target = { ...staff, actor_id: "target" }
   const h = harness(
     ...actor,
     [target],
@@ -525,7 +528,7 @@ it("prepares unassigned users without inventing role grants", async () => {
   expect(
     await h.service.prepareUserDeletion("user", "target", h.context)
   ).toMatchObject({ previous_active: null, role_ids: [], version: 1 })
-  expect(h.execute.mock.calls[4][0]).toContain("insert into rbac_staff_access")
+  expect(h.execute.mock.calls[4][0]).toContain("insert into rbac_actor_access")
 })
 it("blocks duplicate deletion and role changes while deletion is pending", async () => {
   const archived = { ...staff, deleted_at: "2026-10-30T00:00:00Z" }
@@ -553,7 +556,7 @@ it.each(["missing", "live", "version", "user"])(
   async (mismatch) => {
     const target = {
       ...staff,
-      user_id: "target",
+      actor_id: "target",
       version: 2,
       deleted_at: "2026-10-30T00:00:00Z",
     }
@@ -567,7 +570,7 @@ it.each(["missing", "live", "version", "user"])(
                 ? { deleted_at: null }
                 : mismatch === "version"
                   ? { version: 3 }
-                  : { user_id: "other" }),
+                  : { actor_id: "other" }),
             },
           ]
     const restore = harness([], row)
@@ -586,7 +589,7 @@ it.each(["missing", "live", "version", "user"])(
 it("finalizes deletion by releasing role assignments and auditing the account removal", async () => {
   const target = {
     ...staff,
-    user_id: "target",
+    actor_id: "target",
     version: 2,
     deleted_at: "2026-10-30T00:00:00Z",
   }
@@ -602,7 +605,7 @@ it.each([true, false, null])(
   async (previous_active) => {
     const target = {
       ...staff,
-      user_id: "target",
+      actor_id: "target",
       version: 2,
       deleted_at: "2026-10-30T00:00:00Z",
     }
@@ -614,7 +617,7 @@ it.each([true, false, null])(
     )
     expect(h.execute.mock.calls[2][0]).toContain(
       previous_active === null
-        ? "delete from rbac_staff_access"
+        ? "delete from rbac_actor_access"
         : "deleted_at = null"
     )
     expect(h.execute.mock.calls.at(-1)![1][2]).toBe("restore_user_access")
@@ -640,3 +643,95 @@ it.each(["create_role", "update_role"] as const)(
     ).rejects.toThrow("reserved")
   }
 )
+
+it.each([
+  { type: "unknown", id: "id" },
+  { type: "customer", id: "" },
+])("rejects invalid managed actor references %j", async (target) => {
+  const h = harness(...actor)
+  await expect(
+    h.service.mutate(
+      "user",
+      {
+        kind: "set_actor",
+        actor: target,
+        role_ids: [],
+        active: true,
+        version: 0,
+      },
+      h.context
+    )
+  ).rejects.toThrow("Unknown actor")
+})
+it("refuses assigning the system role to a customer", async () => {
+  const h = harness(...actor, [admin])
+  await expect(
+    h.service.mutate(
+      "user",
+      {
+        kind: "set_actor",
+        actor: { type: "customer", id: "customer" },
+        role_ids: [admin.id],
+        active: true,
+        version: 0,
+      },
+      h.context
+    )
+  ).rejects.toThrow("only be assigned to admin")
+})
+it("assigns ordinary roles to a customer with a distinct typed record and atomic audit", async () => {
+  const customer = { ...staff, actor_id: "customer", actor_type: "customer" }
+  const h = harness(
+    ...actor,
+    [reader],
+    [],
+    [],
+    [customer],
+    [],
+    [],
+    [{ count: "1" }],
+    []
+  )
+  ;(h.service as any).accessConfig_ = createAccessConfig({
+    actors: [{ type: "vendor", validate: async () => {} }],
+  })
+  const result = await h.service.mutate(
+    "user",
+    {
+      kind: "set_actor",
+      actor: { type: "customer", id: "customer" },
+      role_ids: [reader.id],
+      active: true,
+      version: 0,
+    },
+    h.context
+  )
+  expect(result.result).toMatchObject({
+    actor_id: "customer",
+    actor_type: "customer",
+    role_ids: [reader.id],
+  })
+  expect(h.execute.mock.calls[4][1]).toEqual(["customer", "customer"])
+  expect(h.execute.mock.calls[5][1].slice(1)).toEqual([
+    "customer",
+    "customer",
+    true,
+  ])
+})
+it("rejects a customer record as a native user deletion receipt", async () => {
+  const h = harness(
+    [],
+    [
+      {
+        ...staff,
+        actor_id: "target",
+        actor_type: "customer",
+        version: 2,
+        deleted_at: "2026-10-30T00:00:00Z",
+      },
+    ]
+  )
+  await expect(
+    h.service.settleUserDeletion(createUserDeletion(), "deleted", h.context)
+  ).rejects.toThrow("reload")
+})

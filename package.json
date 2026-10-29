@@ -69,7 +69,8 @@
     "test": "vitest run --coverage",
     "format": "prettier --write src tests scripts *.json *.mts",
     "format:check": "prettier --check src tests scripts *.json *.mts",
-    "access:snapshot": "node scripts/snapshot-native-routes.mjs"
+    "access:snapshot": "node scripts/snapshot-native-routes.mjs",
+    "test:integration": "node scripts/test-integration.mjs"
   },
   "peerDependencies": {
     "@medusajs/admin-sdk": "^2.22.1",

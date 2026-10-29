@@ -18,7 +18,7 @@ import * as permissions from "../../src/api/admin/access/permissions/route"
 import middlewares from "../../src/api/middlewares"
 
 import { createPrincipal } from "../fixtures/access"
-const principal = createPrincipal({ user_id: "u" })
+const principal = createPrincipal({ actor_id: "u" })
 function harness(path = "/admin/products", method = "GET", body: unknown = {}) {
   const access = {
     policyFor: createAccessConfig().policyFor,
@@ -250,7 +250,8 @@ it("staff pagination merges assigned users and treats new users as inactive", as
     28,
   ])
   const assigned = {
-    user_id: "one",
+    actor_id: "one",
+    actor_type: "user",
     role_ids: ["r"],
     active: true,
     version: 1,
@@ -394,7 +395,7 @@ it("searches native users and includes names of only their assigned roles", asyn
       { id: "reader", name: "Reader" },
       { id: "other", name: "Other" },
     ],
-    staff: [{ user_id: "one", active: true, role_ids: ["reader"] }],
+    staff: [{ actor_id: "one", active: true, role_ids: ["reader"] }],
   } as any)
   await staff.GET(h.req, h.res)
   expect(h.users.listAndCountUsers.mock.calls[0][0]).toEqual({ q: "test" })

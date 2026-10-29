@@ -64,13 +64,13 @@ const AccessManagement = () => {
         ))}
       </Tabs.List>
       <Tabs.Content value="roles">
-        <RolesList userId={access.user_id} superuser={access.is_superuser} />
+        <RolesList userId={access.actor_id} superuser={access.is_superuser} />
       </Tabs.Content>
       <Tabs.Content value="users">
-        <UsersList userId={access.user_id} superuser={access.is_superuser} />
+        <UsersList userId={access.actor_id} superuser={access.is_superuser} />
       </Tabs.Content>
       <Tabs.Content value="activity">
-        <ActivityList userId={access.user_id} />
+        <ActivityList userId={access.actor_id} />
       </Tabs.Content>
       <Tabs.Content value="my-access">
         <MyAccess
