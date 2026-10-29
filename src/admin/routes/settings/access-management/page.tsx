@@ -5,7 +5,9 @@ import { errorMessage, useAccess } from "../../../lib/access"
 import { RolesList } from "../../../components/access-management/roles-list"
 import { UsersList } from "../../../components/access-management/users-list"
 import { ActivityList } from "../../../components/access-management/activity-list"
+import { InvitationsList } from "../../../components/access-management/invitations-list"
 import { MyAccess } from "../../../components/access-management/my-access"
+import { hasPermissionCandidate } from "../../../../lib/access/permission-key"
 
 const AccessManagement = () => {
   const query = useAccess()
@@ -33,14 +35,17 @@ const AccessManagement = () => {
       </Container>
     )
   const views = [
-    ...(access.permissions.includes("roles.view")
+    ...(hasPermissionCandidate(access, "roles.view")
       ? [{ id: "roles", label: "Roles" }]
       : []),
-    ...(access.permissions.includes("staff.view")
+    ...(hasPermissionCandidate(access, "staff.view")
       ? [{ id: "users", label: "Users" }]
       : []),
-    ...(access.permissions.includes("audit.view")
+    ...(hasPermissionCandidate(access, "audit.view")
       ? [{ id: "activity", label: "Activity" }]
+      : []),
+    ...(access.is_superuser
+      ? [{ id: "invitations", label: "Invitations" }]
       : []),
     { id: "my-access", label: "My access" },
   ]
@@ -72,6 +77,11 @@ const AccessManagement = () => {
       <Tabs.Content value="activity">
         <ActivityList userId={access.actor_id} />
       </Tabs.Content>
+      {access.is_superuser && (
+        <Tabs.Content value="invitations">
+          <InvitationsList userId={access.actor_id} />
+        </Tabs.Content>
+      )}
       <Tabs.Content value="my-access">
         <MyAccess
           access={access}

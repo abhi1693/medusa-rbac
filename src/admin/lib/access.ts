@@ -3,9 +3,22 @@ import { useEffect, useRef } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { AccessPrincipal, Permission } from "../../lib/access/permissions"
 
+declare const __BACKEND_URL__: string | undefined
+declare const __AUTH_TYPE__: "session" | "jwt" | undefined
+declare const __JWT_TOKEN_STORAGE_KEY__: string | undefined
+
 export const sdk = new Medusa({
-  baseUrl: window.location.origin,
-  auth: { type: "session" },
+  baseUrl:
+    typeof __BACKEND_URL__ === "string"
+      ? __BACKEND_URL__
+      : window.location.origin,
+  auth: {
+    type: typeof __AUTH_TYPE__ === "string" ? __AUTH_TYPE__ : "session",
+    jwtTokenStorageKey:
+      typeof __JWT_TOKEN_STORAGE_KEY__ === "string"
+        ? __JWT_TOKEN_STORAGE_KEY__
+        : undefined,
+  },
 })
 export type Role = {
   id: string
@@ -34,6 +47,15 @@ export type AuditEvent = {
   target_label?: string
 }
 export type PermissionEntry = { id: Permission; label: string; group: string }
+export type Invitation = {
+  id: string
+  email: string
+  token: string
+  expires_at: string
+  created_at: string
+  roles: Pick<Role, "id" | "name">[]
+  role_ids: string[]
+}
 const root = "/admin/access"
 export const accessApi = {
   profile: () =>
@@ -55,6 +77,23 @@ export const accessApi = {
       roles?: Pick<Role, "id" | "name">[]
     }>(`${root}/me`),
   roles: () => sdk.client.fetch<{ roles: Role[] }>(`${root}/roles`),
+  invitations: (offset: number, q = "") =>
+    sdk.client.fetch<{ invitations: Invitation[]; count: number }>(
+      `${root}/invites`,
+      {
+        query: { offset, limit: 25, ...(q ? { q } : {}) },
+      }
+    ),
+  createInvitation: (body: { email: string; role_ids: string[] }) =>
+    sdk.client.fetch<{ invite: Invitation }>(`${root}/invites`, {
+      method: "POST",
+      body,
+    }),
+  deleteInvitation: (id: string) =>
+    sdk.client.fetch(`${root}/invites/${id}`, { method: "DELETE" }),
+  resendInvitation: (id: string) => sdk.admin.invite.resend(id),
+  deleteUser: (id: string) =>
+    sdk.client.fetch(`${root}/staff/${id}`, { method: "DELETE" }),
   permissions: () =>
     sdk.client.fetch<{ permissions: PermissionEntry[] }>(`${root}/permissions`),
   staff: (offset: number, q = "") =>

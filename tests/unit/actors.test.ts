@@ -165,3 +165,9 @@ it("provides validated management routes for typed actor assignments", async () 
     policyFor("DELETE", "/admin/access/actors/customer/customer")
   ).toBeNull()
 })
+
+it("keeps configured custom actor types manageable without imposing native-user naming", () => {
+  expect(
+    policyFor("POST", "/admin/access/actors/vendor-admin/vendor-id")?.superuser
+  ).toBe(true)
+})

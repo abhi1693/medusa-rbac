@@ -2,6 +2,7 @@ import nativeRoutes from "./native-routes.json"
 import type { MedusaRequest } from "@medusajs/framework/http"
 import { PERMISSIONS, type AccessPrincipal } from "./permissions"
 import { policyFor, type Policy } from "./policy"
+import { permissionKeyMatches as matchesPermission } from "./permission-key"
 
 export type PermissionDefinition = readonly [
   id: string,
@@ -170,14 +171,6 @@ export function validateRules(
       ...(conditions ? { conditions: { ...conditions } } : {}),
     }
   })
-}
-
-function matchesPermission(pattern: string, permission: string) {
-  return (
-    pattern === permission ||
-    pattern === "*" ||
-    (pattern.endsWith(".*") && permission.startsWith(pattern.slice(0, -1)))
-  )
 }
 
 /** Priority, then exact key/namespace specificity, then condition count, then deny. */

@@ -1,9 +1,25 @@
 import { useMemo, useState } from "react"
-import { useQuery, keepPreviousData } from "@tanstack/react-query"
-import { Button, createDataTableColumnHelper, useDataTable } from "@medusajs/ui"
+import { useMutation, useQuery, keepPreviousData } from "@tanstack/react-query"
+import {
+  Button,
+  DropdownMenu,
+  IconButton,
+  toast,
+  usePrompt,
+  createDataTableColumnHelper,
+  useDataTable,
+} from "@medusajs/ui"
 import { Link } from "react-router-dom"
-import { accessApi, type Staff } from "../../lib/access"
+import {
+  accessApi,
+  errorMessage,
+  useRefreshAccess,
+  type Staff,
+} from "../../lib/access"
 import { SettingsTable } from "./settings-table"
+
+import { EllipsisHorizontal, Trash } from "@medusajs/icons"
+import { InvitationEditor } from "../invitation-editor"
 
 const column = createDataTableColumnHelper<Staff>()
 export function UsersList({
@@ -13,6 +29,17 @@ export function UsersList({
   userId: string
   superuser: boolean
 }) {
+  const [inviting, setInviting] = useState(false)
+  const prompt = usePrompt()
+  const refresh = useRefreshAccess()
+  const remove = useMutation({
+    mutationFn: accessApi.deleteUser,
+    onSuccess: async () => {
+      await refresh()
+      toast.success("User deleted")
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  })
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 25 })
   const [search, setSearch] = useState("")
   const users = useQuery({
@@ -55,8 +82,50 @@ export function UsersList({
               ? "Roles unavailable"
               : "No roles assigned",
       }),
+      ...(superuser
+        ? [
+            column.display({
+              id: "actions",
+              header: "",
+              cell: ({ row }) =>
+                row.original.id === userId ? null : (
+                  <DropdownMenu>
+                    <DropdownMenu.Trigger asChild>
+                      <IconButton
+                        size="small"
+                        variant="transparent"
+                        aria-label={`Actions for ${row.original.email}`}
+                      >
+                        <EllipsisHorizontal />
+                      </IconButton>
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Content align="end">
+                      <DropdownMenu.Item
+                        className="text-ui-fg-error"
+                        disabled={remove.isPending}
+                        onClick={async () => {
+                          if (
+                            await prompt({
+                              title: "Delete user?",
+                              description: `Delete ${row.original.email} and revoke their access? This cannot be undone.`,
+                              confirmText: "Delete",
+                              cancelText: "Cancel",
+                            })
+                          )
+                            remove.mutate(row.original.id)
+                        }}
+                      >
+                        <Trash />
+                        Delete
+                      </DropdownMenu.Item>
+                    </DropdownMenu.Content>
+                  </DropdownMenu>
+                ),
+            }),
+          ]
+        : []),
     ],
-    [superuser]
+    [superuser, userId, prompt, remove.isPending, remove.mutate]
   )
   const table = useDataTable({
     data: users.data?.staff || [],
@@ -68,19 +137,22 @@ export function UsersList({
     search: { state: search, onSearchChange: setSearch },
   })
   return (
-    <SettingsTable
-      title="Users"
-      instance={table}
-      empty="No users yet"
-      search="Search users"
-      error={users.error}
-      action={
-        superuser && (
-          <Button size="small" variant="secondary" asChild>
-            <Link to="/settings/users">Manage users</Link>
-          </Button>
-        )
-      }
-    />
+    <>
+      <SettingsTable
+        title="Users"
+        instance={table}
+        empty="No users yet"
+        search="Search users"
+        error={users.error}
+        action={
+          superuser && (
+            <Button size="small" onClick={() => setInviting(true)}>
+              Invite user
+            </Button>
+          )
+        }
+      />
+      {inviting && <InvitationEditor onClose={() => setInviting(false)} />}
+    </>
   )
 }

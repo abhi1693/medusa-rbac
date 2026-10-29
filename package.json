@@ -12,7 +12,6 @@
   },
   "files": [
     ".medusa/server",
-    "patches",
     "README.md",
     "LICENSE"
   ],
@@ -38,30 +37,15 @@
       "import": "./.medusa/server/public/admin-access.mjs",
       "require": "./.medusa/server/src/public/admin-access.js"
     },
-    "./admin/access-denied": {
-      "types": "./.medusa/server/src/public/access-denied.d.ts",
-      "import": "./.medusa/server/public/access-denied.mjs",
-      "require": "./.medusa/server/src/public/access-denied.js"
-    },
-    "./admin/invite-roles": {
-      "types": "./.medusa/server/src/public/invite-roles.d.ts",
-      "import": "./.medusa/server/public/invite-roles.mjs",
-      "require": "./.medusa/server/src/public/invite-roles.js"
-    },
-    "./admin/invites": {
-      "types": "./.medusa/server/src/public/invites.d.ts",
-      "import": "./.medusa/server/public/invites.mjs",
-      "require": "./.medusa/server/src/public/invites.js"
-    },
-    "./admin/users": {
-      "types": "./.medusa/server/src/public/users.d.ts",
-      "import": "./.medusa/server/public/users.mjs",
-      "require": "./.medusa/server/src/public/users.js"
-    },
     "./.medusa/server/src/modules/*": "./.medusa/server/src/modules/*/index.js",
     "./config": "./.medusa/server/src/lib/access/config.js",
     "./require-permission": "./.medusa/server/src/lib/access/middleware.js",
-    "./workflows": "./.medusa/server/src/workflows/index.js"
+    "./workflows": "./.medusa/server/src/workflows/index.js",
+    "./client": {
+      "types": "./.medusa/server/src/client.d.ts",
+      "import": "./.medusa/server/public/client.mjs",
+      "require": "./.medusa/server/src/client.js"
+    }
   },
   "scripts": {
     "build": "medusa plugin:build && node scripts/build-public.mjs",

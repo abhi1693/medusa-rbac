@@ -77,6 +77,11 @@ export function RolesList({
         cell: ({ getValue }) => getValue().length,
       }),
       column.display({
+        id: "rules",
+        header: "Rules",
+        cell: ({ row }) => row.original.rules?.length || 0,
+      }),
+      column.display({
         ...column.action({ actions: [] }),
         header: "",
         cell: ({ row }) => (

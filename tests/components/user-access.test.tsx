@@ -1,4 +1,3 @@
-import { deleteStaffUser } from "../../src/admin/lib/users"
 import { it, expect, vi, beforeEach } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -6,12 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter, useLocation } from "react-router-dom"
 import { toast } from "@medusajs/ui"
 import { sdk } from "../../src/admin/lib/access"
-import {
-  createAccessInvite,
-  deleteAccessInvite,
-  acceptAccessInvite,
-} from "../../src/admin/lib/invites"
-import CurrentAccess from "../../src/admin/widgets/current-access"
 import UserAccess from "../../src/admin/widgets/user-access"
 import { RolesTable } from "../../src/admin/components/roles-table"
 import { InviteRoles } from "../../src/admin/components/invite-roles"
@@ -70,61 +63,6 @@ function mount(element: React.ReactNode) {
     user: userEvent.setup(),
   }
 }
-it("opens an avatar menu with identity, profile and access links", async () => {
-  const { user } = mount(<CurrentAccess />)
-  await user.click(await screen.findByRole("button", { name: "Account menu" }))
-  expect(screen.getByText("Test Staff")).toBeVisible()
-  expect(screen.getByText("staff@example.test")).toBeVisible()
-  expect(screen.getByRole("menuitem", { name: "My profile" })).toHaveAttribute(
-    "href",
-    "/settings/profile"
-  )
-  expect(screen.getByRole("menuitem", { name: "My access" })).toHaveAttribute(
-    "href",
-    "/settings/access-management?view=my-access"
-  )
-})
-it.each(["email", "fallback", "avatar", "partial"])(
-  "uses profile fallback: %s",
-  async (kind) => {
-    if (kind === "email")
-      profile = { user: createProfile({ first_name: null, last_name: null }) }
-    if (kind === "fallback") profile = new Error("profile unavailable")
-    if (kind === "avatar")
-      profile = { user: createProfile({ avatar_url: "/avatar.png" }) }
-    if (kind === "partial")
-      profile = { user: createProfile({ last_name: null }) }
-    const { user } = mount(<CurrentAccess />)
-    await user.click(
-      await screen.findByRole("button", { name: "Account menu" })
-    )
-    expect(screen.getByRole("menuitem", { name: "Log out" })).toBeVisible()
-  }
-)
-it("clears cached access and returns to login after native logout", async () => {
-  vi.spyOn(sdk.auth, "logout").mockResolvedValue(undefined)
-  const { user, client } = mount(<CurrentAccess />)
-  client.setQueryData(["private-orders"], ["sensitive"])
-  await user.click(await screen.findByRole("button", { name: "Account menu" }))
-  await user.click(screen.getByRole("menuitem", { name: "Log out" }))
-  await waitFor(() =>
-    expect(screen.getByTestId("location")).toHaveTextContent("/login")
-  )
-  expect(sdk.auth.logout).toHaveBeenCalledOnce()
-  expect(client.getQueryData(["private-orders"])).toBeUndefined()
-})
-it("keeps the session and reports a failed logout", async () => {
-  vi.spyOn(sdk.auth, "logout").mockRejectedValue(
-    new Error("Logout unavailable")
-  )
-  const { user } = mount(<CurrentAccess />)
-  await user.click(await screen.findByRole("button", { name: "Account menu" }))
-  await user.click(screen.getByRole("menuitem", { name: "Log out" }))
-  await waitFor(() =>
-    expect(toast.error).toHaveBeenCalledWith("Logout unavailable")
-  )
-  expect(screen.getByTestId("location")).toHaveTextContent("/")
-})
 it("shows existing roles on user details and saves through the shared editor", async () => {
   const { user } = mount(
     <UserAccess data={createProfile({ id: "staff" }) as any} />
@@ -229,29 +167,6 @@ it("shows invite role loading and fetch errors", async () => {
     "Roles unavailable"
   )
 })
-it("uses the custom invitation APIs without submitting roles to Enterprise APIs", async () => {
-  await createAccessInvite({
-    email: "invited@example.test",
-    roles: ["reader"],
-  })
-  await createAccessInvite({ email: "invited@example.test" })
-  await deleteAccessInvite("inv_test")
-  await acceptAccessInvite("invite-token", {
-    first_name: "Test",
-    auth_token: "signup-token",
-  })
-  expect(fetcher).toHaveBeenCalledWith("/admin/access/invites", {
-    method: "POST",
-    body: { email: "invited@example.test", role_ids: ["reader"] },
-  })
-  expect(fetcher).toHaveBeenCalledWith("/access/invites/accept", {
-    method: "POST",
-    query: { token: "invite-token" },
-    headers: { Authorization: "Bearer signup-token" },
-    body: { first_name: "Test" },
-  })
-})
-
 it("uses a native table for selected roles and preserves the other selection", async () => {
   const onSelectionChange = vi.fn()
   const { user } = mount(
@@ -271,11 +186,4 @@ it("renders an empty role selector as a native table", () => {
   expect(
     screen.getByRole("cell", { name: "No roles assigned" })
   ).toHaveAttribute("colspan", "3")
-})
-
-it("uses guarded user deletion from the native Admin action", async () => {
-  await deleteStaffUser("target")
-  expect(fetcher).toHaveBeenCalledWith("/admin/access/staff/target", {
-    method: "DELETE",
-  })
 })

@@ -13,6 +13,8 @@ import {
 import type { PermissionEntry, Role } from "../../lib/access"
 import { SettingsTable } from "./settings-table"
 
+import { PermissionRules, ruleDrafts } from "../permission-rules"
+
 const catalog = PERMISSIONS.map(([id, label, group]) => ({ id, label, group }))
 const column = createDataTableColumnHelper<PermissionEntry>()
 const columns = [
@@ -65,6 +67,16 @@ export function MyAccess({
           </Text>
         </div>
       </Container>
+      {Boolean(access.rules?.length) && (
+        <Container>
+          <PermissionRules
+            value={ruleDrafts(access.rules!)}
+            readOnly
+            onChange={undefined}
+            permissions={permissionCatalog}
+          />
+        </Container>
+      )}
       <SettingsTable
         title="Permissions"
         headingLevel="h2"

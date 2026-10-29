@@ -4,13 +4,7 @@ const pkg = JSON.parse(
   await readFile(new URL("../package.json", import.meta.url), "utf8")
 )
 await build({
-  entryPoints: [
-    "src/public/admin-access.ts",
-    "src/public/access-denied.ts",
-    "src/public/invite-roles.ts",
-    "src/public/invites.ts",
-    "src/public/users.ts",
-  ],
+  entryPoints: ["src/public/admin-access.ts", "src/client.ts"],
   outdir: ".medusa/server/public",
   bundle: true,
   format: "esm",

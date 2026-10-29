@@ -735,3 +735,13 @@ it("rejects a customer record as a native user deletion receipt", async () => {
     h.service.settleUserDeletion(createUserDeletion(), "deleted", h.context)
   ).rejects.toThrow("reload")
 })
+
+it("includes newly configured permissions in the protected system-role snapshot", async () => {
+  const h = harness([admin])
+  ;(h.service as any).accessConfig_ = createAccessConfig({
+    permissions: [["documents.read", "Read documents", "Documents"]],
+  })
+  expect(
+    (await h.service.snapshot([], h.context)).roles[0].permissions
+  ).toContain("documents.read")
+})

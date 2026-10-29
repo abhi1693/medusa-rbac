@@ -6,6 +6,7 @@ import {
 } from "@medusajs/framework/http"
 import { enforceAdminAccess } from "./middlewares/enforce-admin-access"
 import { protectManagedInvites } from "./middlewares/protect-managed-invites"
+import { authenticateActor } from "./middlewares/authenticate-actor"
 import {
   deleteRoleInput,
   roleInput,
@@ -20,7 +21,22 @@ import {
 
 export default defineMiddlewares({
   routes: [
+    {
+      matcher: "/access/actors/:actor_type/me",
+      method: "GET",
+      middlewares: [authenticateActor],
+    },
     { matcher: /^\/admin(?:\/.*)?$/i, middlewares: [enforceAdminAccess] },
+    {
+      matcher: "/admin/access/invites",
+      method: "GET",
+      middlewares: [
+        validateAndTransformQuery(staffPageInput, {
+          defaults: [],
+          isList: true,
+        }),
+      ],
+    },
     {
       matcher: "/admin/access/invites",
       method: "POST",

@@ -7,6 +7,7 @@ import {
   type PermissionContext,
 } from "../../lib/access/config"
 import type { MedusaRequest } from "@medusajs/framework/http"
+import { hasPermissionCandidate } from "../../lib/access/permission-key"
 import { randomUUID } from "node:crypto"
 import {
   InjectManager,
@@ -235,6 +236,12 @@ class AccessControlService extends MedusaService({
     )
   }
 
+  permissionCandidates(principal: AccessPrincipal) {
+    return this.configuration.ids.filter((permission) =>
+      hasPermissionCandidate(principal, permission)
+    )
+  }
+
   @InjectManager()
   async prepareUserDeletion(
     actorId: string,
@@ -395,6 +402,28 @@ class AccessControlService extends MedusaService({
     )
     return invitation
   }
+
+  @InjectManager()
+  async invitationSummaries(
+    inviteIds: string[],
+    @MedusaContext() context?: Context<EntityManager>
+  ) {
+    if (!inviteIds.length) return []
+    const manager = context!.transactionManager || context!.manager!
+    return manager.execute<
+      {
+        invite_id: string
+        email: string
+        actor_id: string
+        status: string
+        role_ids: string[]
+        roles: { id: string; name: string }[]
+      }[]
+    >(
+      "select i.invite_id, i.email, i.actor_id, i.status, coalesce((select jsonb_agg(r.id order by r.name) from rbac_invitation_role a join rbac_access_role r on r.id = a.role_id where a.invitation_id = i.id and a.deleted_at is null and r.deleted_at is null), '[]'::jsonb) as role_ids, coalesce((select jsonb_agg(jsonb_build_object('id', r.id, 'name', r.name) order by r.name) from rbac_invitation_role a join rbac_access_role r on r.id = a.role_id where a.invitation_id = i.id and a.deleted_at is null and r.deleted_at is null), '[]'::jsonb) as roles from rbac_invitation_access i where i.deleted_at is null and i.invite_id in (select jsonb_array_elements_text(?::jsonb))",
+      [JSON.stringify(inviteIds)]
+    )
+  }
   @InjectManager()
   async actorPrincipal(
     actor: ActorReference,
@@ -475,8 +504,14 @@ class AccessControlService extends MedusaService({
   ) {
     const manager = context!.manager!
     return {
-      roles: await manager.execute<Role[]>(
-        "select * from rbac_access_role where deleted_at is null order by is_superuser desc, name"
+      roles: (
+        await manager.execute<Role[]>(
+          "select * from rbac_access_role where deleted_at is null order by is_superuser desc, name"
+        )
+      ).map((role) =>
+        role.is_superuser
+          ? { ...role, permissions: this.configuration.ids }
+          : role
       ),
       staff: userIds.length
         ? await manager.execute<ActorAccessRecord[]>(

@@ -187,10 +187,7 @@ it("users link to native user details without a duplicate role editor", async ()
   expect(
     await screen.findByRole("link", { name: "staff@example.test" })
   ).toHaveAttribute("href", "/settings/users/staff")
-  expect(screen.getByRole("link", { name: "Manage users" })).toHaveAttribute(
-    "href",
-    "/settings/users"
-  )
+  expect(screen.getByRole("button", { name: "Invite user" })).toBeVisible()
   expect(
     screen.queryByRole("button", { name: "Manage access" })
   ).not.toBeInTheDocument()

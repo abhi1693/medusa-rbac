@@ -8,7 +8,6 @@ import { sdk, accessApi, errorMessage } from "../../src/admin/lib/access"
 import { PERMISSION_IDS } from "../../src/lib/access/permissions"
 import { RoleEditor } from "../../src/admin/components/role-editor"
 import { StaffEditor } from "../../src/admin/components/staff-editor"
-import CurrentAccess from "../../src/admin/widgets/current-access"
 
 import {
   createRole,
@@ -188,25 +187,6 @@ it("shows staff save failure and supports Cancel and Escape", async () => {
   await user.keyboard("{Escape}")
   expect(onClose).toHaveBeenCalledTimes(2)
 })
-it.each([
-  { ...principal, active: false },
-  { ...principal, role_ids: [] },
-  principal,
-])("shows the current-access widget with a native link", async (access) => {
-  responses.me = { access }
-  const { user } = mount(<CurrentAccess />)
-  await user.click(await screen.findByRole("button", { name: "Account menu" }))
-  expect(screen.getByRole("menuitem", { name: "My access" })).toHaveAttribute(
-    "href",
-    "/settings/access-management?view=my-access"
-  )
-})
-it("renders no widget while the access request is pending", () => {
-  responses.me = new Promise(() => {})
-  const { container } = mount(<CurrentAccess />)
-  expect(container).toBeEmptyDOMElement()
-})
-
 it.each([true, false])(
   "staff role selection alone grants or removes access: %s",
   async (assigning) => {
@@ -230,3 +210,31 @@ it.each([true, false])(
     )
   }
 )
+
+it("searches role permissions and protects a save in progress from dismissal", async () => {
+  let resolve!: (value: any) => void
+  fetcher.mockImplementation(
+    () =>
+      new Promise((done) => {
+        resolve = done
+      })
+  )
+  const close = vi.fn()
+  const { user } = mount(
+    <RoleEditor open permissions={permissions} onClose={close} />
+  )
+  await user.type(screen.getByLabelText("Role name"), "New role")
+  await user.type(screen.getByLabelText("Search permissions"), "prices")
+  expect(
+    screen.queryByRole("checkbox", { name: "View products" })
+  ).not.toBeInTheDocument()
+  await user.click(screen.getByRole("tab", { name: "Rules (0)" }))
+  expect(screen.getByText(/No permission rules/)).toBeVisible()
+  await user.click(screen.getByRole("button", { name: "Save role" }))
+  await user.keyboard("{Escape}")
+  expect(close).not.toHaveBeenCalled()
+  await act(async () => {
+    resolve({})
+  })
+  await waitFor(() => expect(close).toHaveBeenCalled())
+})

@@ -11,7 +11,7 @@ Targets Medusa **2.22.1**, without enabling native Enterprise RBAC.
 Until an npm release is published, install from this repository, pinned to a reviewed commit:
 
 ```sh
-npm install 'github:abhi1693/medusa-rbac#<commit>'
+npm install 'git+https://github.com/abhi1693/medusa-rbac.git#<commit>'
 ```
 
 The Git dependency runs `prepare` to build server and Admin extensions. Node 22.22 or newer is required.
@@ -90,7 +90,7 @@ export default defineMiddlewares({
 
 Use the module's `allows(principal, permission, context)` for application workflow/service checks. HTTP middleware does not automatically authorize jobs, scripts or workflows invoked outside HTTP; those callers must establish an actor and check permissions themselves.
 
-The module token is `ACCESS_CONTROL` from `@abhi1693/medusa-rbac/modules/access-control`; its service type is exported from `@abhi1693/medusa-rbac/service`. Public browser helpers and native adapters are under `@abhi1693/medusa-rbac/admin/{access,access-denied,invite-roles,invites,users}`.
+The module token is `ACCESS_CONTROL` from `@abhi1693/medusa-rbac/modules/access-control`; its service type is exported from `@abhi1693/medusa-rbac/service`. Admin SDK helpers are exported from `@abhi1693/medusa-rbac/admin/access`. The framework-independent storefront client is exported from `@abhi1693/medusa-rbac/client`. Both reuse Medusa authentication.
 
 ## Admin and storefront actors
 
@@ -132,7 +132,7 @@ Keys support exact identifiers, namespace suffix wildcards (`orders.*`) and `*`.
 
 Matching rules from all assigned roles are evaluated together: higher priority, then exact key or more specific namespace, then more conditions, then deny on a tie. Explicit permission grants behave like an exact allow at priority zero. Superuser has all registered permissions, including later additions. Inactive accounts always deny. A broad grant can defeat a narrower wildcard deny through specificity; use explicit deny priorities when required.
 
-The role editor supports rule keys, allow/deny, priority and JSON context conditions. Personal access includes labels for application-defined permissions. Its permission list describes explicit role grants; contextual access is decided per request.
+The role editor provides searchable permission groups and typed condition controls for text, numbers, booleans, empty values and alternatives. Personal access includes application-defined permission labels and read-only rule details. Its permission list describes explicit role grants; contextual access is decided per request.
 
 ## Server guarantees and boundaries
 
@@ -143,13 +143,31 @@ The role editor supports rule keys, allow/deny, priority and JSON context condit
 - Managed invitations compose native workflows and activate assigned roles before first login. Pending invitations reserve their roles. Account deletion and invitation failures use compensation.
 - Audit history records access changes. It is not a log of every authorization decision or a complete commerce audit system.
 
-## Native Admin adapters on Medusa 2.22.1
+## Administration and invitations
 
-The public Admin SDK supports routes and widgets, but not replacing native invite hooks or the global error boundary. The optional Dashboard patch in `patches/` connects native invite forms, deletion and 403 handling to this plugin. Copy it into the host's `patches/` and apply with `patch-package`; merge it with any existing Dashboard patch. No app-specific aliases are needed.
+The plugin uses supported Admin routes and widget zones with Medusa UI tables, drawers and focus modals. It requires no modifications to Medusa packages. **Settings → Access management** includes roles, users, pending invitations, access history and personal access. The native user-detail page includes an editable Roles widget. Safe user deletion is available in the plugin’s Users table; self-deletion and deleting the last active Superuser are rejected.
 
-The invitation workflow composes Medusa's public user-creation, invite-deletion and grouped-event steps with an Auth module identity-binding step. Failed acceptance restores the invite and actor association; grouped events are emitted only after workflow success.
+Create an invitation in the Invitations tab, select its roles and share the generated private link. Links honor the application's Admin base path and open the acceptance form through the supported login widget. Acceptance uses native EmailPass registration, associates the identity with the new user and activates the selected roles before first login. A failed acceptance restores the invitation and identity association so the same credentials can retry. The workflow composes public user-creation, invite-deletion and grouped-event steps; events publish after successful completion.
 
-The plugin works independently of Admin Kit. A host can separately install [medusa-admin-kit](https://github.com/zanreal-labs/medusa-admin-kit) for its shared Catalog table and cross-plugin column registry; it does not replace the native extension constraints above.
+Native invitation events remain available for an application notification subscriber. To deliver role-bound invitations by email, configure that subscriber to use the plugin’s login URL: `<admin-origin>/<admin-path>/login?rbac_invite=<token>`. Link creation itself does not require an email provider. Native invitation pages remain available for their normal flows; use the plugin's invitation screen when assigning roles during signup.
+
+The native Admin keeps its navigation, account menu and error handling. The topbar **My access** link remains available when an operation is denied. Permission changes refresh access and revalidate native routes without requiring another login. Access management authorizes every read and write on the server.
+
+The plugin works independently of Admin Kit. A host may separately install [medusa-admin-kit](https://github.com/zanreal-labs/medusa-admin-kit) for its shared Catalog table and cross-plugin column registry.
+
+## Storefront client
+
+Use your application's configured Medusa SDK, including its backend URL, publishable key and customer authentication:
+
+```ts
+import { createAccessClient } from "@abhi1693/medusa-rbac/client"
+
+const access = createAccessClient(sdk)
+const summary = await access.me("customer")
+// summary.actor, summary.roles, summary.permission_candidates
+```
+
+`GET /access/actors/:actor_type/me` requires native session or bearer authentication for the requested actor type and validates the actor through its owning module. It returns only that actor's role names and candidate permission identifiers, without exposing policy conditions or another account's assignments. Candidates are navigation hints: context-dependent permissions still require server authorization for each operation. The client has no React or browser-global dependency and accepts optional request headers for server rendering.
 
 ## Development
 
@@ -161,7 +179,7 @@ npm test
 npm pack --ignore-scripts --dry-run
 ```
 
-The tests cover native route inventories, middleware denial, configurable registries, rule precedence/context, role/staff concurrency guards, workflow compensation and Admin components. PostgreSQL and browser lifecycle tests also run in the consuming application's isolated test harness. `npm run access:snapshot` refreshes the native inventory for a reviewed framework upgrade; generating a snapshot never authorizes new routes.
+The tests cover native route inventories, middleware denial, configurable registries, typed actor isolation, rule precedence/context, concurrency guards, workflow compensation and Admin components. Run `RBAC_TEST_DATABASE_URL=<local-postgres-url> npm run test:integration` for isolated PostgreSQL actor and invitation rollback/retry checks. Browser lifecycle checks also run in the consuming application’s isolated test harness. `npm run access:snapshot` refreshes the native inventory for a reviewed framework upgrade; generating a snapshot never authorizes new routes.
 
 Framework references: [plugins](https://docs.medusajs.com/learn/fundamentals/plugins/create), [module options](https://docs.medusajs.com/learn/fundamentals/modules/options), [API middlewares](https://docs.medusajs.com/learn/fundamentals/api-routes/middlewares), [Admin widgets](https://docs.medusajs.com/learn/fundamentals/admin/widgets).
 

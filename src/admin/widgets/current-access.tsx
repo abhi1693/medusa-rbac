@@ -1,75 +1,61 @@
 import { MY_ACCESS_PATH } from "../lib/access-presentation"
 import { defineWidgetConfig } from "@medusajs/admin-sdk"
-import { Avatar, DropdownMenu, Text, toast } from "@medusajs/ui"
-import { Link, useNavigate } from "react-router-dom"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { accessApi, errorMessage, sdk, useAccess } from "../lib/access"
+import { Button } from "@medusajs/ui"
+import { Link, useLocation, useNavigate } from "react-router-dom"
+import { useQueryClient } from "@tanstack/react-query"
+import { useEffect, useRef } from "react"
+import { accessFingerprint, useAccess } from "../lib/access"
 
 const CurrentAccess = () => {
   const access = useAccess()
-  const client = useQueryClient()
   const navigate = useNavigate()
-  const profile = useQuery({
-    queryKey: ["medusa-rbac", access.data?.access.actor_id, "profile"],
-    queryFn: accessApi.profile,
-    enabled: Boolean(access.data?.access.actor_id),
-    retry: false,
-  })
-  const logout = useMutation({
-    mutationFn: () => sdk.auth.logout(),
-    onSuccess: () => {
-      client.clear()
-      navigate("/login", { replace: true })
-    },
-    onError: (error) => toast.error(errorMessage(error)),
-  })
+  const location = useLocation()
+  const client = useQueryClient()
+  const previous = useRef<string>()
+  const fingerprint = access.data && accessFingerprint(access.data.access)
+  useEffect(() => {
+    if (!fingerprint || !access.isFetchedAfterMount) return
+    const changed = previous.current && previous.current !== fingerprint
+    previous.current = fingerprint
+    let cancelled = false
+    if (changed)
+      void client
+        .refetchQueries(
+          {
+            predicate: (query) => query.queryKey[0] !== "medusa-rbac",
+            type: "all",
+          },
+          { cancelRefetch: false }
+        )
+        .then(() => {
+          if (!cancelled)
+            return navigate(
+              {
+                pathname: location.pathname,
+                search: location.search,
+                hash: location.hash,
+              },
+              { replace: true, state: location.state }
+            )
+        })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    fingerprint,
+    access.isFetchedAfterMount,
+    client,
+    navigate,
+    location.pathname,
+    location.search,
+    location.hash,
+    location.state,
+  ])
   if (!access.data) return null
-  const user = profile.data?.user
-  const name =
-    [user?.first_name, user?.last_name].filter(Boolean).join(" ") ||
-    user?.email ||
-    "Account"
   return (
-    <DropdownMenu>
-      <DropdownMenu.Trigger asChild>
-        <button
-          aria-label="Account menu"
-          className="rounded-full outline-none focus-visible:shadow-borders-focus"
-        >
-          <Avatar
-            src={user?.avatar_url || undefined}
-            fallback={name[0].toUpperCase()}
-            size="small"
-          />
-        </button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Content align="end" className="min-w-56">
-        <DropdownMenu.Label>
-          <Text size="small" weight="plus">
-            {name}
-          </Text>
-          {user?.email && (
-            <Text size="xsmall" className="text-ui-fg-subtle">
-              {user.email}
-            </Text>
-          )}
-        </DropdownMenu.Label>
-        <DropdownMenu.Separator />
-        <DropdownMenu.Item asChild>
-          <Link to="/settings/profile">My profile</Link>
-        </DropdownMenu.Item>
-        <DropdownMenu.Item asChild>
-          <Link to={MY_ACCESS_PATH}>My access</Link>
-        </DropdownMenu.Item>
-        <DropdownMenu.Separator />
-        <DropdownMenu.Item
-          disabled={logout.isPending}
-          onClick={() => logout.mutate()}
-        >
-          Log out
-        </DropdownMenu.Item>
-      </DropdownMenu.Content>
-    </DropdownMenu>
+    <Button size="small" variant="transparent" asChild>
+      <Link to={MY_ACCESS_PATH}>My access</Link>
+    </Button>
   )
 }
 export const config = defineWidgetConfig({
