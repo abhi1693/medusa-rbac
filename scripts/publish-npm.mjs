@@ -9,6 +9,8 @@ import { pathToFileURL } from "node:url"
 export const PACKAGE = "@abhi1693/medusa-rbac"
 export const REGISTRY = "https://registry.npmjs.org/"
 const stable = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
+const verificationAttempts = 31
+const verificationDelay = 60_000
 const packageUrl = REGISTRY + encodeURIComponent(PACKAGE)
 const digest = (bytes, algorithm, encoding) =>
   createHash(algorithm).update(bytes).digest(encoding)
@@ -179,6 +181,7 @@ export async function publishArchive({
       env: { ...process.env, "npm_config_@abhi1693:registry": REGISTRY },
     }),
   sleep = delay,
+  report = (event) => console.info(JSON.stringify(event)),
 }) {
   archive = path.resolve(cwd, archive)
   const bytes = await readFile(archive)
@@ -229,7 +232,7 @@ export async function publishArchive({
       publishError = error
     }
   }
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < verificationAttempts; attempt++) {
     try {
       const metadata = await readRegistryJson(versionUrl, fetchImpl)
       if (metadata) {
@@ -264,12 +267,29 @@ export async function publishArchive({
     } catch (error) {
       if (!publishError) throw error
     }
-    if (attempt < 4) await sleep(2000)
+    if (attempt < verificationAttempts - 1) {
+      report({
+        status: "waiting-for-registry",
+        stage: existing
+          ? "verify-existing-release"
+          : publishError
+            ? "verify-publish-outcome"
+            : "npm-processing",
+        name: release.name,
+        version: release.version,
+        attempt: attempt + 1,
+        maximum_attempts: verificationAttempts,
+        retry_in_seconds: verificationDelay / 1000,
+        message:
+          "Waiting for npm registry metadata and archive visibility; no additional publish will be attempted.",
+      })
+      await sleep(verificationDelay)
+    }
   }
   throw (
     publishError ||
     new Error(
-      "Published archive/latest verification did not converge after 5 attempts"
+      `Published archive/latest verification did not converge after ${verificationAttempts} attempts`
     )
   )
 }
