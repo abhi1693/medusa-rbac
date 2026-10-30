@@ -2,9 +2,10 @@ import { it, expect, vi, beforeEach } from "vitest"
 import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { MemoryRouter, useLocation } from "react-router-dom"
+import { MemoryRouter, useLocation, Routes, Route } from "react-router-dom"
 import { toast, TooltipProvider } from "@medusajs/ui"
 import AccessManagement from "../../src/admin/routes/settings/access-management/page"
+import RoleDetailsPage from "../../src/admin/routes/settings/access-management/roles/[id]/page"
 import { sdk } from "../../src/admin/lib/access"
 import {
   createPrincipal,
@@ -34,7 +35,12 @@ beforeEach(() => {
     .spyOn(sdk.client, "fetch")
     .mockImplementation(async (url: any, options: any) => {
       if (options?.method) return {}
-      const result = responses[String(url).split("/").at(-1)!]
+      const role = responses.roles?.roles?.find(
+        (item: any) => String(url) === `/admin/access/roles/${item.id}`
+      )
+      const result = role
+        ? { role, actors: [], actor_count: 0, pending_invitation_count: 0 }
+        : responses[String(url).split("/").at(-1)!]
       if (result instanceof Error) throw result
       return result
     })
@@ -56,8 +62,14 @@ function mount(path = "/", cached = false) {
   const view = render(
     <MemoryRouter initialEntries={[path]}>
       <QueryClientProvider client={client}>
-        <TooltipProvider>
-          <AccessManagement />
+        <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+          <Routes>
+            <Route
+              path="/settings/access-management/roles/:id"
+              element={<RoleDetailsPage />}
+            />
+            <Route path="*" element={<AccessManagement />} />
+          </Routes>
           <Location />
         </TooltipProvider>
       </QueryClientProvider>
@@ -89,13 +101,13 @@ it("shows the native role table toolbar, search and system role menu", async () 
   ).not.toBeInTheDocument()
   await user.click(screen.getByRole("menuitem", { name: "View permissions" }))
   expect(
-    await screen.findByRole("heading", { name: "Role permissions" })
+    await screen.findByRole("heading", { name: "Superuser" })
   ).toBeVisible()
-  expect(screen.getByLabelText("Role name")).toBeDisabled()
+  expect(screen.getByText(/protected system role/)).toBeVisible()
   expect(
     screen.queryByRole("button", { name: "Save role" })
   ).not.toBeInTheDocument()
-  await user.click(screen.getByRole("button", { name: "Close" }))
+  await user.click(screen.getByRole("link", { name: "Back to roles" }))
 })
 it("creates and edits roles from the native toolbar and row menus", async () => {
   const { user } = mount()
@@ -109,13 +121,11 @@ it("creates and edits roles from the native toolbar and row menus", async () => 
   expect(
     await screen.findByRole("heading", { name: "Edit role" })
   ).toBeVisible()
-  expect(screen.queryByText("products.view")).not.toBeInTheDocument()
+  expect(screen.getByText("products.view")).toBeVisible()
   await user.click(screen.getByRole("button", { name: "Cancel" }))
   await user.click(screen.getByRole("cell", { name: "Reader" }))
-  expect(
-    await screen.findByRole("heading", { name: "Role permissions" })
-  ).toBeVisible()
-  expect(screen.getByLabelText("Role name")).toHaveValue("Reader")
+  expect(await screen.findByRole("heading", { name: "Reader" })).toBeVisible()
+  expect(screen.getByRole("heading", { name: "Permissions" })).toBeVisible()
 })
 it("confirms deletion, permits cancellation and reports a failure", async () => {
   const { user } = mount()
@@ -176,10 +186,11 @@ it("role viewers can inspect permissions without management actions", async () =
     screen.queryByRole("menuitem", { name: "Edit" })
   ).not.toBeInTheDocument()
   await user.click(screen.getByRole("menuitem", { name: "View permissions" }))
+  expect(await screen.findByRole("heading", { name: "Reader" })).toBeVisible()
+  expect(screen.getByText("View products")).toBeVisible()
   expect(
-    await screen.findByRole("heading", { name: "Role permissions" })
-  ).toBeVisible()
-  expect(screen.getByRole("checkbox", { name: "View products" })).toBeDisabled()
+    screen.queryByRole("button", { name: "Edit role" })
+  ).not.toBeInTheDocument()
 })
 it("users link to native user details without a duplicate role editor", async () => {
   const { user } = mount()
@@ -369,20 +380,18 @@ it("closes privileged editors after the current superuser loses access", async (
   ).not.toBeInTheDocument()
 })
 
-it("does not open an editor before the permission catalog loads", async () => {
+it("opens a role detail while waiting for the permission catalog", async () => {
   let ready!: (value: unknown) => void
   responses.permissions = new Promise((resolve) => {
     ready = resolve
   })
   const { user } = mount()
-  await user.click(await screen.findByRole("cell", { name: "Reader" }))
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  await screen.findByRole("cell", { name: "Reader" })
   expect(screen.getByRole("button", { name: "Create role" })).toBeDisabled()
-  await act(async () => ready({ permissions: editorPermissions }))
   await user.click(screen.getByRole("cell", { name: "Reader" }))
-  expect(
-    await screen.findByRole("heading", { name: "Role permissions" })
-  ).toBeVisible()
+  expect(await screen.findByText("Loading role…")).toBeVisible()
+  await act(async () => ready({ permissions: editorPermissions }))
+  expect(await screen.findByRole("heading", { name: "Reader" })).toBeVisible()
 })
 it("an open editor becomes read-only if the superuser keeps only role viewing", async () => {
   const { user, client } = mount()
@@ -423,4 +432,46 @@ it("old activity records use readable fallbacks rather than internal identifiers
   ).toBeVisible()
   expect(screen.getByRole("cell", { name: "Removed item" })).toBeVisible()
   expect(screen.getByRole("cell", { name: "Access updated" })).toBeVisible()
+})
+
+it("distinguishes configuration roles and duplicates them as editable Admin roles", async () => {
+  responses.roles.roles = [
+    createRole({
+      source: "configuration",
+      actor_count: 2,
+      created_at: "2026-10-30T00:00:00Z",
+    }),
+  ]
+  const { user } = mount()
+  expect(
+    await screen.findByRole("cell", { name: "Configuration" })
+  ).toBeVisible()
+  expect(screen.getByRole("cell", { name: "2" })).toBeVisible()
+  await roleMenu(user)
+  expect(
+    screen.queryByRole("menuitem", { name: "Edit" })
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole("menuitem", { name: "Delete" })
+  ).not.toBeInTheDocument()
+  await user.click(screen.getByRole("menuitem", { name: "Duplicate" }))
+  expect(screen.getByLabelText("Role name")).toHaveValue("Reader copy")
+  await user.click(screen.getByRole("button", { name: "Save role" }))
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Role saved"))
+  expect(fetcher).toHaveBeenCalledWith("/admin/access/roles", {
+    method: "POST",
+    body: { name: "Reader copy", permissions: ["products.view"], rules: [] },
+  })
+})
+
+it("marks removed configuration definitions and prevents copying obsolete grants", async () => {
+  responses.roles.roles = [
+    createRole({ source: "configuration", configuration_status: "removed" }),
+  ]
+  const { user } = mount()
+  expect(await screen.findByText("Definition missing")).toBeVisible()
+  await roleMenu(user)
+  expect(
+    screen.queryByRole("menuitem", { name: "Duplicate" })
+  ).not.toBeInTheDocument()
 })

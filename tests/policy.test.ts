@@ -68,7 +68,9 @@ test("native and custom access fail closed", () => {
     policyFor("DELETE", "/admin/access/staff/user_test")?.superuser,
     true
   )
-  assert.equal(policyFor("GET", "/admin/access/roles/role_test"), null)
+  assert.deepEqual(policyFor("GET", "/admin/access/roles/role_test"), {
+    permissions: ["roles.view"],
+  })
 })
 
 test("normalization cannot turn a denied request into an alternate operation", () => {

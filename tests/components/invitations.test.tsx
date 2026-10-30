@@ -52,7 +52,7 @@ function mount(element: React.ReactNode, path = "/app/login") {
     user: userEvent.setup(),
     ...render(
       <QueryClientProvider client={client}>
-        <TooltipProvider>
+        <TooltipProvider delayDuration={0} skipDelayDuration={0}>
           <RouterProvider router={router} />
         </TooltipProvider>
       </QueryClientProvider>

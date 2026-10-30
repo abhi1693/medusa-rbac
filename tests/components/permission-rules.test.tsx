@@ -164,7 +164,7 @@ it("shows immutable rule previews and custom personal permission labels", () => 
   ).not.toBeInTheDocument()
   unmount()
   render(
-    <TooltipProvider>
+    <TooltipProvider delayDuration={0} skipDelayDuration={0}>
       <MyAccess
         access={createPrincipal({
           permissions: ["documents.read"],

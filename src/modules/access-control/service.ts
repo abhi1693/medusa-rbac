@@ -8,7 +8,14 @@ import {
 } from "../../lib/access/config"
 import type { MedusaRequest } from "@medusajs/framework/http"
 import { hasPermissionCandidate } from "../../lib/access/permission-key"
+import {
+  SUPERUSER_ROLE,
+  configuredRoleKey,
+  roleSource,
+  type RoleSource,
+} from "../../lib/access/roles"
 import { randomUUID } from "node:crypto"
+import { isDeepStrictEqual } from "node:util"
 import {
   InjectManager,
   InjectTransactionManager,
@@ -35,7 +42,7 @@ import {
   type Permission,
 } from "../../lib/access/permissions"
 
-type Role = {
+export type Role = {
   id: string
   key: string
   name: string
@@ -43,6 +50,21 @@ type Role = {
   rules?: PermissionRule[]
   is_superuser: boolean
   version: number
+  created_at?: string
+  source?: RoleSource
+  actor_count?: number
+  pending_invitation_count?: number
+  configuration_status?: "active" | "removed"
+}
+export type RoleActor = {
+  actor_type: string
+  actor_id: string
+  active: boolean
+}
+export type RoleSynchronization = {
+  created: number
+  updated: number
+  revoked: number
 }
 export type ActorAccessRecord = {
   id: string
@@ -114,6 +136,9 @@ const conflict = (): never => {
   )
 }
 
+const roleColumns =
+  "r.*, (select count(*) from rbac_role_assignment a join rbac_actor_access s on s.id = a.access_id where a.role_id = r.id and a.deleted_at is null and s.deleted_at is null) as actor_count, (select count(*) from rbac_invitation_role a join rbac_invitation_access i on i.id = a.invitation_id where a.role_id = r.id and a.deleted_at is null and i.deleted_at is null and i.status = 'pending') as pending_invitation_count"
+
 class AccessControlService extends MedusaService({
   AccessRole,
   ActorAccess,
@@ -150,6 +175,18 @@ class AccessControlService extends MedusaService({
     } catch (error) {
       return invalid((error as Error).message)
     }
+  }
+  private validateEditableRoleName(name: string): string {
+    const normalized = name.trim()
+    if (normalized.toLowerCase() === SUPERUSER_ROLE.name.toLowerCase())
+      invalid("The Superuser name is reserved for the system role")
+    if (
+      this.configuration.roles.some(
+        (role) => role.name.toLowerCase() === normalized.toLowerCase()
+      )
+    )
+      invalid("This role name is reserved by application configuration")
+    return normalized
   }
   policyFor(method: string, path: string) {
     return this.configuration.policyFor(method, path)
@@ -469,9 +506,9 @@ class AccessControlService extends MedusaService({
       "select r.* from rbac_access_role r join rbac_role_assignment a on a.role_id = r.id where a.access_id = ? and a.deleted_at is null and r.deleted_at is null",
       [subject.id]
     )
-    const assigned = persisted.filter(
-      (role) => actorType === "user" || !role.is_superuser
-    )
+    const assigned = persisted
+      .filter((role) => actorType === "user" || !role.is_superuser)
+      .map((role) => this.effectiveRole(role))
     return {
       actor_id: userId,
       actor_type: actorType,
@@ -502,17 +539,13 @@ class AccessControlService extends MedusaService({
     userIds: string[] = [],
     @MedusaContext() context?: Context<EntityManager>
   ) {
-    const manager = context!.manager!
+    const manager = context!.transactionManager || context!.manager!
     return {
       roles: (
         await manager.execute<Role[]>(
-          "select * from rbac_access_role where deleted_at is null order by is_superuser desc, name"
+          `select ${roleColumns} from rbac_access_role r where r.deleted_at is null order by r.is_superuser desc, r.name, r.id`
         )
-      ).map((role) =>
-        role.is_superuser
-          ? { ...role, permissions: this.configuration.ids }
-          : role
-      ),
+      ).map((role) => this.presentRole(role)),
       staff: userIds.length
         ? await manager.execute<ActorAccessRecord[]>(
             "select s.*, coalesce((select jsonb_agg(a.role_id order by a.role_id) from rbac_role_assignment a where a.access_id = s.id and a.deleted_at is null), '[]'::jsonb) as role_ids from rbac_actor_access s where s.actor_type = 'user' and s.deleted_at is null and s.actor_id in (select jsonb_array_elements_text(?::jsonb)) order by s.created_at, s.id",
@@ -520,6 +553,186 @@ class AccessControlService extends MedusaService({
           )
         : [],
     }
+  }
+
+  private effectiveRole(role: Role): Role {
+    if (
+      roleSource(role) === "configuration" &&
+      !this.configuration.roles.some(
+        (definition) => configuredRoleKey(definition.key) === role.key
+      )
+    )
+      return { ...role, permissions: [], rules: [] }
+    return role
+  }
+
+  private presentRole(persisted: Role): Role {
+    const role = this.effectiveRole(persisted)
+    const source = roleSource(role)
+    return {
+      ...role,
+      permissions: role.is_superuser
+        ? this.configuration.ids
+        : role.permissions,
+      source,
+      actor_count: Number(role.actor_count || 0),
+      pending_invitation_count: Number(role.pending_invitation_count || 0),
+      ...(source === "configuration"
+        ? {
+            configuration_status: this.configuration.roles.some(
+              (definition) => configuredRoleKey(definition.key) === role.key
+            )
+              ? "active"
+              : "removed",
+          }
+        : {}),
+    }
+  }
+
+  @InjectManager()
+  async roleDetail(
+    id: string,
+    pagination: { offset?: number; limit?: number } = {},
+    @MedusaContext() context?: Context<EntityManager>
+  ) {
+    const offset = pagination.offset ?? 0
+    const limit = pagination.limit ?? 20
+    if (
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      !Number.isSafeInteger(limit) ||
+      limit < 1 ||
+      limit > 100
+    )
+      invalid("Role pagination requires a nonnegative offset and limit 1–100")
+    const manager = context!.transactionManager || context!.manager!
+    const [role] = await manager.execute<Role[]>(
+      `select ${roleColumns} from rbac_access_role r where r.deleted_at is null and r.id = ?`,
+      [id]
+    )
+    if (!role)
+      throw new MedusaError(MedusaError.Types.NOT_FOUND, "Role not found")
+    const actors = await manager.execute<RoleActor[]>(
+      "select s.actor_type, s.actor_id, s.active from rbac_role_assignment a join rbac_actor_access s on s.id = a.access_id where a.role_id = ? and a.deleted_at is null and s.deleted_at is null order by s.actor_type, s.actor_id limit ? offset ?",
+      [id, limit, offset]
+    )
+    const detail = this.presentRole(role)
+    return {
+      role: detail,
+      actors,
+      actor_count: detail.actor_count!,
+      pending_invitation_count: detail.pending_invitation_count!,
+      offset,
+      limit,
+    }
+  }
+
+  @InjectManager()
+  async syncConfiguredRoles(
+    @MedusaContext() context?: Context<EntityManager>
+  ): Promise<RoleSynchronization> {
+    return this.syncConfiguredRolesTransaction(context)
+  }
+
+  @InjectTransactionManager()
+  protected async syncConfiguredRolesTransaction(
+    @MedusaContext() context?: Context<EntityManager>
+  ): Promise<RoleSynchronization> {
+    const manager = context!.transactionManager!
+    await manager.execute("select pg_advisory_xact_lock(718231910)")
+    const roles = await manager.execute<Role[]>(
+      "select * from rbac_access_role where deleted_at is null"
+    )
+    return this.synchronizeRoleRecords(manager, roles)
+  }
+
+  private async synchronizeRoleRecords(
+    manager: EntityManager,
+    roles: Role[]
+  ): Promise<RoleSynchronization> {
+    const result: RoleSynchronization = { created: 0, updated: 0, revoked: 0 }
+    const keys = new Set(
+      this.configuration.roles.map((definition) =>
+        configuredRoleKey(definition.key)
+      )
+    )
+    for (const definition of this.configuration.roles) {
+      const key = configuredRoleKey(definition.key)
+      const existing = roles.find((role) => role.key === key)
+      if (existing?.is_superuser)
+        invalid("A configured role cannot replace the protected Superuser")
+      if (
+        roles.some(
+          (role) =>
+            role.key !== key &&
+            role.name.trim().toLowerCase() === definition.name.toLowerCase() &&
+            !(roleSource(role) === "configuration" && keys.has(role.key))
+        )
+      )
+        invalid(
+          `Configured role name conflicts with another role: ${definition.name}`
+        )
+      if (
+        existing &&
+        existing.name === definition.name &&
+        isDeepStrictEqual(existing.permissions, definition.permissions) &&
+        isDeepStrictEqual(existing.rules || [], definition.rules)
+      )
+        continue
+      let after: Role
+      if (existing) {
+        ;[after] = await manager.execute<Role[]>(
+          "update rbac_access_role set name = ?, permissions = ?::jsonb, rules = ?::jsonb, version = version + 1, updated_at = now() where id = ? returning *",
+          [
+            definition.name,
+            JSON.stringify(definition.permissions),
+            JSON.stringify(definition.rules),
+            existing.id,
+          ]
+        )
+        result.updated++
+      } else {
+        ;[after] = await manager.execute<Role[]>(
+          "insert into rbac_access_role (id, key, name, permissions, is_superuser, version, rules) values (?, ?, ?, ?::jsonb, false, 1, ?::jsonb) returning *",
+          [
+            `rbar_${randomUUID()}`,
+            key,
+            definition.name,
+            JSON.stringify(definition.permissions),
+            JSON.stringify(definition.rules),
+          ]
+        )
+        result.created++
+      }
+      await this.writeAudit(
+        manager,
+        "system:configuration",
+        "sync_configured_role",
+        after.id,
+        { before: existing || null, after }
+      )
+    }
+    for (const role of roles) {
+      if (
+        roleSource(role) !== "configuration" ||
+        keys.has(role.key) ||
+        (!role.permissions.length && !role.rules?.length)
+      )
+        continue
+      const [after] = await manager.execute<Role[]>(
+        "update rbac_access_role set permissions = '[]'::jsonb, rules = '[]'::jsonb, version = version + 1, updated_at = now() where id = ? returning *",
+        [role.id]
+      )
+      await this.writeAudit(
+        manager,
+        "system:configuration",
+        "revoke_configured_role",
+        role.id,
+        { before: role, after }
+      )
+      result.revoked++
+    }
+    return result
   }
 
   @InjectManager()
@@ -689,8 +902,7 @@ class AccessControlService extends MedusaService({
       await this.ensureSuperuserRemains(manager)
       after = { ...current, role_ids: ids }
     } else if (input.kind === "create_role") {
-      if (input.name.trim().toLowerCase() === "superuser")
-        invalid("The Superuser name is reserved for the system role")
+      const name = this.validateEditableRoleName(input.name)
       const permissions = this.validatePermissions(input.permissions)
       const rules = this.validateRules(input.rules)
       targetId = `rbar_${randomUUID()}`
@@ -699,7 +911,7 @@ class AccessControlService extends MedusaService({
         [
           targetId,
           `custom_${randomUUID()}`,
-          input.name.trim(),
+          name,
           JSON.stringify(permissions),
           JSON.stringify(rules),
         ]
@@ -712,6 +924,8 @@ class AccessControlService extends MedusaService({
       if (!role)
         throw new MedusaError(MedusaError.Types.NOT_FOUND, "Role not found")
       if (role.is_superuser) forbidden("The Superuser role is protected")
+      if (roleSource(role) === "configuration")
+        forbidden("This role is managed in application configuration")
       if (role.version !== input.version) conflict()
       targetId = role.id
       before = role
@@ -729,12 +943,11 @@ class AccessControlService extends MedusaService({
           [role.id]
         )
       } else {
-        if (input.name.trim().toLowerCase() === "superuser")
-          invalid("The Superuser name is reserved for the system role")
+        const name = this.validateEditableRoleName(input.name)
         ;[after] = await manager.execute(
           "update rbac_access_role set name = ?, permissions = ?::jsonb, rules = ?::jsonb, version = version + 1, updated_at = now() where id = ? returning *",
           [
-            input.name.trim(),
+            name,
             JSON.stringify(this.validatePermissions(input.permissions)),
             JSON.stringify(this.validateRules(input.rules)),
             role.id,
@@ -786,6 +999,7 @@ class AccessControlService extends MedusaService({
     const roles = await manager.execute<Role[]>(
       "select * from rbac_access_role where deleted_at is null"
     )
+    await this.synchronizeRoleRecords(manager, roles)
     const adminRole = roles.find((r) => r.is_superuser)
     if (adminRole) {
       const principal = await this.principalWithManager(userId, manager)
@@ -796,8 +1010,13 @@ class AccessControlService extends MedusaService({
     }
     const id = `rbar_${randomUUID()}`
     await manager.execute(
-      "insert into rbac_access_role (id, key, name, permissions, is_superuser, version) values (?, 'superuser', 'Superuser', ?::jsonb, true, 1)",
-      [id, JSON.stringify(this.configuration.ids)]
+      "insert into rbac_access_role (id, key, name, permissions, is_superuser, version) values (?, ?, ?, ?::jsonb, true, 1)",
+      [
+        id,
+        SUPERUSER_ROLE.key,
+        SUPERUSER_ROLE.name,
+        JSON.stringify(this.configuration.ids),
+      ]
     )
     const staffId = `rbas_${randomUUID()}`
     await manager.execute(

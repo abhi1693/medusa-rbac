@@ -51,7 +51,9 @@ function mount(element: React.ReactNode) {
     ...render(
       <MemoryRouter>
         <QueryClientProvider client={client}>
-          <TooltipProvider>{element}</TooltipProvider>
+          <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+            {element}
+          </TooltipProvider>
         </QueryClientProvider>
       </MemoryRouter>
     ),

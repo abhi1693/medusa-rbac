@@ -1,6 +1,13 @@
 import { useMemo, useState } from "react"
+import { Link, useNavigate } from "react-router-dom"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { EllipsisHorizontal, PencilSquare, Trash, Eye } from "@medusajs/icons"
+import {
+  EllipsisHorizontal,
+  PencilSquare,
+  Trash,
+  Eye,
+  SquareTwoStack,
+} from "@medusajs/icons"
 import {
   Badge,
   Button,
@@ -18,7 +25,13 @@ import {
   useRefreshAccess,
   type Role,
 } from "../../lib/access"
-import { roleRows } from "../../lib/access-presentation"
+import {
+  roleRows,
+  roleDetailPath,
+  roleIsManaged,
+  roleSourceLabel,
+  roleCreatedAt,
+} from "../../lib/access-presentation"
 import { RoleEditor } from "../role-editor"
 import { SettingsTable } from "./settings-table"
 
@@ -32,8 +45,10 @@ export function RolesList({
 }) {
   const [editor, setEditor] = useState<{
     role?: Role
+    initialRole?: Role
     viewOnly: boolean
   } | null>(null)
+  const navigate = useNavigate()
   const [search, setSearch] = useState("")
   const [sorting, setSorting] = useState<DataTableSortingState | null>(null)
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 25 })
@@ -63,10 +78,24 @@ export function RolesList({
         header: "Role",
         enableSorting: true,
         cell: ({ row }) => (
-          <div className="flex items-center gap-x-2">
+          <Link
+            className="text-ui-fg-base hover:text-ui-fg-interactive font-medium"
+            to={roleDetailPath(row.original.id)}
+          >
             {row.original.name}
-            {row.original.is_superuser && (
-              <Badge size="2xsmall">System role</Badge>
+          </Link>
+        ),
+      }),
+      column.display({
+        id: "source",
+        header: "Managed in",
+        cell: ({ row }) => (
+          <div className="flex flex-wrap gap-1">
+            <Badge size="2xsmall">{roleSourceLabel(row.original)}</Badge>
+            {row.original.configuration_status === "removed" && (
+              <Badge size="2xsmall" color="red">
+                Definition missing
+              </Badge>
             )}
           </div>
         ),
@@ -75,6 +104,16 @@ export function RolesList({
         header: "Permissions",
         enableSorting: true,
         cell: ({ getValue }) => getValue().length,
+      }),
+      column.display({
+        id: "members",
+        header: "Accounts",
+        cell: ({ row }) => row.original.actor_count ?? "—",
+      }),
+      column.display({
+        id: "created",
+        header: "Created",
+        cell: ({ row }) => roleCreatedAt(row.original.created_at),
       }),
       column.display({
         id: "rules",
@@ -102,15 +141,25 @@ export function RolesList({
               onClick={(event) => event.stopPropagation()}
             >
               <DropdownMenu.Item
-                disabled={!permissions.data}
-                onClick={() =>
-                  setEditor({ role: row.original, viewOnly: true })
-                }
+                onClick={() => navigate(roleDetailPath(row.original.id))}
               >
                 <Eye />
                 View permissions
               </DropdownMenu.Item>
-              {superuser && !row.original.is_superuser && (
+              {superuser &&
+                !row.original.is_superuser &&
+                row.original.configuration_status !== "removed" && (
+                  <DropdownMenu.Item
+                    disabled={!permissions.data}
+                    onClick={() =>
+                      setEditor({ initialRole: row.original, viewOnly: false })
+                    }
+                  >
+                    <SquareTwoStack />
+                    Duplicate
+                  </DropdownMenu.Item>
+                )}
+              {superuser && !roleIsManaged(row.original) && (
                 <>
                   <DropdownMenu.Item
                     disabled={!permissions.data}
@@ -147,7 +196,14 @@ export function RolesList({
         ),
       }),
     ],
-    [superuser, permissions.data, prompt, remove.isPending, remove.mutate]
+    [
+      superuser,
+      permissions.data,
+      prompt,
+      remove.isPending,
+      remove.mutate,
+      navigate,
+    ]
   )
   const rows = roleRows(roles.data?.roles || [], search, sorting)
   const table = useDataTable({
@@ -162,10 +218,7 @@ export function RolesList({
     search: { state: search, onSearchChange: setSearch },
     sorting: { state: sorting, onSortingChange: setSorting },
     pagination: { state: pagination, onPaginationChange: setPagination },
-    onRowClick: (_event, row) => {
-      const role = rows.find((item) => item.id === row.id)
-      if (role && permissions.data) setEditor({ role, viewOnly: true })
-    },
+    onRowClick: (_event, row) => navigate(roleDetailPath(row.id)),
   })
   return (
     <>
@@ -190,8 +243,9 @@ export function RolesList({
       />
       {editor && permissions.data && (
         <RoleEditor
-          key={editor.role?.id || "new"}
+          key={editor.role?.id || editor.initialRole?.id || "new"}
           role={editor.role}
+          initialRole={editor.initialRole}
           permissions={permissions.data.permissions}
           open
           readOnly={editor.viewOnly || !superuser}

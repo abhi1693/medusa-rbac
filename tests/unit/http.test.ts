@@ -21,6 +21,7 @@ import { createPrincipal } from "../fixtures/access"
 const principal = createPrincipal({ actor_id: "u" })
 function harness(path = "/admin/products", method = "GET", body: unknown = {}) {
   const access = {
+    configuration: createAccessConfig(),
     policyFor: createAccessConfig().policyFor,
     permissionContext: async () => ({}),
     allows: evaluatePermission,
@@ -65,6 +66,16 @@ function harness(path = "/admin/products", method = "GET", body: unknown = {}) {
 }
 it("wires the native middleware and validation chain", () =>
   expect(middlewares).toBeDefined())
+it("exposes configured actor types alongside the registered permission catalog", async () => {
+  const h = harness()
+  h.access.configuration = createAccessConfig({
+    actors: [{ type: "vendor", validate: async () => {} }],
+  })
+  await permissions.GET(h.req, h.res)
+  expect(h.res.json).toHaveBeenCalledWith(
+    expect.objectContaining({ actor_types: ["user", "customer", "vendor"] })
+  )
+})
 it("rejects ambiguous paths before any native service call", async () => {
   const h = harness("/admin//products")
   await h.run()

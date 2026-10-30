@@ -238,3 +238,14 @@ it("searches role permissions and protects a save in progress from dismissal", a
   })
   await waitFor(() => expect(close).toHaveBeenCalled())
 })
+
+it("keeps direct system-role previews read-only and explains their protection", () => {
+  mount(
+    <RoleEditor open role={owner} permissions={permissions} onClose={vi.fn()} />
+  )
+  expect(screen.getByText(/protected system role/)).toBeVisible()
+  expect(screen.getByLabelText("Role name")).toBeDisabled()
+  expect(
+    screen.queryByRole("button", { name: "Save role" })
+  ).not.toBeInTheDocument()
+})

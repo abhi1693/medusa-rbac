@@ -172,8 +172,10 @@ export function policyFor(method: string, path: string): Policy | null {
     /^\/admin\/access\/actors\/[^/]+\/[^/]+$/.test(path)
   )
     return { permissions: [], superuser: true }
-  if (verb === "GET" && path === "/admin/access/roles")
+  if (verb === "GET" && /^\/admin\/access\/roles(?:\/[^/]+)?$/.test(path))
     return read("roles.view")
+  if (verb === "POST" && path === "/admin/access/evaluate")
+    return { permissions: [], superuser: true }
   if (verb === "GET" && /^\/admin\/access\/staff(?:\/[^/]+)?$/.test(path))
     return read("staff.view")
   if (

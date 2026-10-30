@@ -30,6 +30,10 @@
     "./permissions": "./.medusa/server/src/lib/access/permissions.js",
     "./policy": "./.medusa/server/src/lib/access/policy.js",
     "./bootstrap": "./.medusa/server/src/scripts/bootstrap-superuser.js",
+    "./sync-roles": "./.medusa/server/src/scripts/sync-configured-roles.js",
+    "./roles": "./.medusa/server/src/lib/access/roles.js",
+    "./define-permission": "./.medusa/server/src/lib/access/define-permission.js",
+    "./explain": "./.medusa/server/src/lib/access/explain.js",
     "./middlewares": "./.medusa/server/src/api/middlewares.js",
     "./*": "./.medusa/server/src/*.js",
     "./admin/access": {
