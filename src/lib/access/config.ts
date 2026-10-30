@@ -1,11 +1,24 @@
 import nativeRoutes from "./native-routes.json"
-import type { MedusaRequest } from "@medusajs/framework/http"
+import type {
+  AuthenticatedMedusaRequest,
+  MedusaRequest,
+} from "@medusajs/framework/http"
 import {
   PERMISSIONS,
   validatePermissions,
   type AccessPrincipal,
 } from "./permissions"
-import { policyFor, type Policy } from "./policy"
+import { type Policy } from "./policy"
+import { describeNative, nativeResources } from "./native-resources"
+import { canonicalPath, createRouteMatcher } from "./route-facts"
+import {
+  describeResource,
+  profileAction,
+  resourceRoutes,
+  validateResources,
+  type OperationDescriptor,
+  type ResourceDefinition,
+} from "./resources"
 import { permissionKeyMatches as matchesPermission } from "./permission-key"
 import {
   SUPERUSER_ROLE,
@@ -13,6 +26,7 @@ import {
   type ConfiguredRoleDefinition,
 } from "./roles"
 import { explainPermission } from "./explain"
+import { immutableConfig } from "./immutable-config"
 import type { ActorProvider } from "./actors"
 
 export type PermissionDefinition = readonly [
@@ -38,6 +52,8 @@ export type AccessControlOptions = {
   roles?: readonly RoleDefinition[]
   /** Explicit policies for custom APIs. Native/management policies take precedence. */
   routes?: RoutePolicy[]
+  /** Structural capability registrations for application/plugin-owned APIs. */
+  resources?: readonly ResourceDefinition[]
   contextResolvers?: ((
     request: MedusaRequest
   ) => PermissionContext | Promise<PermissionContext>)[]
@@ -103,28 +119,108 @@ export function createAccessConfig(options: AccessControlOptions = {}) {
     nativeRoutes.map((route) => route.path.split("/")[2])
   )
   const signatures = new Set<string>()
-  const routes = (options.routes || []).map((route) => {
-    const method = route.method.toUpperCase()
-    const signature = `${method} ${route.path}`
-    if (
-      !/^(GET|POST|PUT|PATCH|DELETE)$/.test(method) ||
-      !/^\/(?:[a-z0-9_-]+|:[a-z][a-z0-9_]*)(?:\/(?:[a-z0-9_-]+|:[a-z][a-z0-9_]*))*$/.test(
-        route.path
-      ) ||
-      signatures.has(signature) ||
-      route.permissions.some((id) => !ids.has(id)) ||
-      (!route.permissions.length && !route.superuser)
+  const routes = immutableConfig(
+    (options.routes || []).map((route) => {
+      const method = route.method.toUpperCase()
+      const signature = `${method} ${route.path}`
+      if (
+        !/^(GET|POST|PUT|PATCH|DELETE)$/.test(method) ||
+        !/^\/(?:[a-z0-9_-]+|:[a-z][a-z0-9_]*)(?:\/(?:[a-z0-9_-]+|:[a-z][a-z0-9_]*))*$/.test(
+          route.path
+        ) ||
+        signatures.has(signature) ||
+        route.permissions.some((id) => !ids.has(id)) ||
+        (!route.permissions.length && !route.superuser)
+      )
+        throw new Error(`Invalid or duplicate route policy: ${signature}`)
+      signatures.add(signature)
+      return {
+        ...route,
+        method,
+      }
+    })
+  )
+  const resources = validateResources(
+    options.resources || [],
+    [...ids],
+    [
+      ...nativeResources,
+      ...[...nativeRoots].map((root) => ({ key: root, root })),
+      ...routes.map((route) => {
+        const parts = route.path.split("/")
+        return { key: parts[2], root: parts[2], namespace: parts[1] }
+      }),
+    ]
+  )
+  const resourceMatcher = createRouteMatcher(resources.flatMap(resourceRoutes))
+  const configuredMatcher = createRouteMatcher(
+    routes.map((route) => ({ path: route.path, methods: [route.method] }))
+  )
+  const resourceOwners = new Set(
+    resources.map(
+      (resource) => `${resource.namespace || "admin"}/${resource.root}`
     )
-      throw new Error(`Invalid or duplicate route policy: ${signature}`)
-    signatures.add(signature)
-    return {
-      ...route,
-      method,
-      pattern: new RegExp(
-        `^${route.path.replace(/:[a-z][a-z0-9_]*/g, "[^/]+")}$`
-      ),
+  )
+  const reserved = (url: string) => {
+    const path = canonicalPath(url)
+    if (!path) return true
+    const parts = path.toLowerCase().split("/")
+    return (
+      parts[1] === "admin" &&
+      (nativeRoots.has(parts[2]) ||
+        nativeResources.some((resource) => resource.root === parts[2]) ||
+        [
+          "rbac",
+          "workflows",
+          "workflow-executions",
+          "api-keys",
+          "search",
+          "search-indexes",
+        ].includes(parts[2]))
+    )
+  }
+  const custom = (
+    method: string,
+    url: string,
+    body?: unknown,
+    actorId?: string
+  ): OperationDescriptor | null => {
+    if (reserved(url)) return null
+    const facts = resourceMatcher(method, url)
+    if (facts) {
+      const resource = resources.find(
+        (resource) =>
+          resource.root === facts.root &&
+          (resource.namespace || "admin") === facts.namespace
+      )!
+      return describeResource(resource, facts, body, actorId)
     }
-  })
+    const parts = canonicalPath(url)!.toLowerCase().split("/")
+    if (resourceOwners.has(`${parts[1]}/${parts[2]}`)) return null
+    const route = configuredMatcher(method, url)
+    if (!route) return null
+    const policy = routes.find(
+      (policy) =>
+        policy.path === route.template && policy.method === route.method
+    )!
+    return {
+      facts: route,
+      resource: route.root,
+      operation: "configured",
+      scope: "global",
+      params: route.params,
+      fieldResource: route.root,
+      actorTypes: ["user"],
+      access: "active-principal",
+      self: false,
+      policy: {
+        permissions: [...policy.permissions],
+        ...(policy.superuser ? { superuser: true } : {}),
+      },
+      action: { operation: "configured" },
+      fieldRequirements: [],
+    }
+  }
   const actors = options.actors || []
   if (
     new Set(actors.map((actor) => actor.type)).size !== actors.length ||
@@ -144,25 +240,82 @@ export function createAccessConfig(options: AccessControlOptions = {}) {
     roles,
     ids: [...ids],
     actors,
+    resources,
     contextResolvers: options.contextResolvers || [],
+    /** Structural inspection only. Enforce resolveRequest(request) with operationAllowed. */
     policyFor(method: string, path: string): Policy | null {
-      const native = policyFor(method, path)
-      if (native) return native
-      // Never reopen native APIs or the access-management namespace with an extension.
-      if (
-        /^\/admin\/(?:access|rbac|users|invites|workflows|workflow-executions|api-keys|search|search-indexes)(?:\/|$)/.test(
-          path
-        )
-      )
-        return null
-      if (path.startsWith("/admin/") && nativeRoots.has(path.split("/")[2]))
-        return null
-      const verb = method === "HEAD" ? "GET" : method
       return (
-        routes.find(
-          (route) => route.method === verb && route.pattern.test(path)
-        ) || null
+        (describeNative(method, path, {}) || custom(method, path, {}))
+          ?.policy || null
       )
+    },
+    async resolveRequest(
+      request: MedusaRequest
+    ): Promise<OperationDescriptor | null> {
+      const actorId = (request as Partial<AuthenticatedMedusaRequest>)
+        .auth_context?.actor_id
+      let descriptor = describeNative(
+        request.method,
+        request.originalUrl,
+        request.body,
+        actorId
+      )
+      if (!descriptor && !reserved(request.originalUrl)) {
+        const facts = resourceMatcher(request.method, request.originalUrl)
+        const resource =
+          facts &&
+          resources.find(
+            (resource) =>
+              resource.root === facts.root &&
+              (resource.namespace || "admin") === facts.namespace
+          )
+        if (facts && resource?.resolveScope) {
+          const action = profileAction(resource.profile, facts)!
+          const scope = await resource.resolveScope(
+            request,
+            immutableConfig({
+              facts,
+              resource: resource.key,
+              operation: action.operation,
+              params: facts.params,
+            })
+          )
+          if (
+            scope === null ||
+            !["global", "personal", "shared"].includes(scope)
+          )
+            return null
+          descriptor = describeResource(
+            resource,
+            facts,
+            request.body,
+            actorId,
+            scope
+          )
+        } else
+          descriptor = custom(
+            request.method,
+            request.originalUrl,
+            request.body,
+            actorId
+          )
+      }
+      if (!descriptor) return null
+      if (descriptor.action.payload) {
+        const permissions = await descriptor.action.payload(
+          request,
+          immutableConfig(descriptor)
+        )
+        if (
+          !Array.isArray(permissions) ||
+          permissions.some((permission) => !ids.has(permission))
+        )
+          return null
+        descriptor.policy.permissions = [
+          ...new Set([...descriptor.policy.permissions, ...permissions]),
+        ]
+      }
+      return descriptor
     },
   }
 }

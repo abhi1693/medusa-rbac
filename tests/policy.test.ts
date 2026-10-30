@@ -1,5 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "vitest"
+import type { MedusaRequest } from "@medusajs/framework/http"
+import { createAccessConfig } from "../src/lib/access/config"
 import { createRequire } from "node:module"
 import { readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
@@ -7,7 +9,6 @@ import {
   additionalWritePermissions,
   can,
   isSelfProfileUpdate,
-  layoutWritePermissions,
   normalizedPath,
   policyFor,
   validateFieldSelection,
@@ -123,7 +124,15 @@ test("native user management requires an active Superuser", () => {
     assert.equal(policyFor(method, path), null, `${method} ${path}`)
 })
 
-test("layout policy matches pinned native scopes and bounded list fields", () => {
+test("layout policy matches pinned native scopes and bounded list fields", async () => {
+  const scopedPermissions = async (body: unknown) =>
+    (
+      await createAccessConfig().resolveRequest({
+        method: "POST",
+        originalUrl: "/admin/layouts/product.details/configuration",
+        body,
+      } as MedusaRequest)
+    )?.policy.permissions ?? null
   const { AdminSetLayoutConfiguration } = nativeRequire(
     "@medusajs/medusa/api/admin/layouts/[zone]/configuration/validators"
   )
@@ -136,15 +145,15 @@ test("layout policy matches pinned native scopes and bounded list fields", () =>
     const body = { ...personal, is_default }
     assert.equal(AdminSetLayoutConfiguration.parse(body).is_default, is_default)
     assert.deepEqual(
-      layoutWritePermissions(body),
+      await scopedPermissions(body),
       is_default ? ["settings.manage"] : []
     )
   }
-  assert.deepEqual(layoutWritePermissions(personal), [])
+  assert.deepEqual(await scopedPermissions(personal), [])
   for (const is_default of ["false", "true", 0, 1, null, [], {}]) {
     const body = { ...personal, is_default }
     assert.throws(() => AdminSetLayoutConfiguration.parse(body))
-    assert.equal(layoutWritePermissions(body), null)
+    assert.equal(await scopedPermissions(body), null)
   }
   assert.equal(
     validateFieldSelection(

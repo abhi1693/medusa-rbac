@@ -3,6 +3,7 @@ export { default as AccessControlService } from "./modules/access-control/servic
 export * from "./lib/access/permissions"
 export * from "./lib/access/config"
 export * from "./lib/access/roles"
+export * from "./resources"
 export {
   requirePermission,
   requireAnyPermission,

@@ -16,6 +16,7 @@ import * as person from "../../src/api/admin/access/staff/[id]/route"
 import * as audit from "../../src/api/admin/access/audit/route"
 import * as permissions from "../../src/api/admin/access/permissions/route"
 import middlewares from "../../src/api/middlewares"
+import { crudProfile, defineResource } from "../../src/resources"
 
 import { createPrincipal } from "../fixtures/access"
 const principal = createPrincipal({ actor_id: "u" })
@@ -23,6 +24,7 @@ function harness(path = "/admin/products", method = "GET", body: unknown = {}) {
   const access = {
     configuration: createAccessConfig(),
     policyFor: createAccessConfig().policyFor,
+    resolveRequest: createAccessConfig().resolveRequest,
     permissionContext: async () => ({}),
     allows: evaluatePermission,
     permissionDefinitions: () => createAccessConfig().permissions,
@@ -119,6 +121,107 @@ it("allows only own safe profile fields without role assignments", async () => {
   expect(h.next).toHaveBeenCalledWith()
   expect(h.req.query.fields).toBe("id,email,first_name,last_name,avatar_url")
   expect(h.access.principal).not.toHaveBeenCalled()
+})
+it("uses a computed self match rather than trusting a declared self rule", async () => {
+  const configuration = createAccessConfig({
+    resources: [
+      defineResource({
+        key: "profiles",
+        root: "profiles",
+        actorTypes: ["user"],
+        profile: {
+          item: {
+            parameter: "id",
+            profile: {
+              actions: {
+                POST: {
+                  operation: "update",
+                  self: {
+                    parameter: "id",
+                    fields: ["first_name"],
+                    responseFields: ["id", "first_name"],
+                  },
+                },
+              },
+            },
+          },
+        },
+        operations: {
+          update: { permissions: ["products.edit"], access: "authenticated" },
+        },
+      }),
+    ],
+  })
+  const own = harness("/admin/profiles/u", "POST", { first_name: "Name" })
+  own.access.resolveRequest = configuration.resolveRequest
+  await own.run()
+  expect(own.next).toHaveBeenCalledWith()
+  expect(own.access.principal).not.toHaveBeenCalled()
+  expect(own.req.query.fields).toBe("id,first_name")
+  for (const [id, body] of [
+    ["Other", { first_name: "Name" }],
+    ["U", { first_name: "Name" }],
+    ["u", { first_name: "Name", role_ids: [] }],
+  ] as const) {
+    const denied = harness(`/admin/profiles/${id}`, "POST", body)
+    denied.access.resolveRequest = configuration.resolveRequest
+    denied.access.principal.mockResolvedValue({
+      ...principal,
+      is_superuser: false,
+      permissions: [],
+    })
+    await denied.run()
+    expect(denied.res.status).toHaveBeenCalledWith(403)
+    expect(denied.next).not.toHaveBeenCalled()
+    expect(denied.req.query.fields).toBeUndefined()
+  }
+})
+it("enforces registered fields, capabilities and unknown-command denial for another resource", async () => {
+  const configuration = createAccessConfig({
+    resources: [
+      defineResource({
+        key: "documents",
+        root: "documents",
+        actorTypes: ["user"],
+        profile: crudProfile(),
+        operations: {
+          read: { permissions: ["products.view"] },
+          create: { permissions: ["products.create"] },
+          update: { permissions: ["products.edit"] },
+          delete: { permissions: ["products.delete"] },
+        },
+        fields: ["id", "inventory_quantity"],
+        fieldRequirements: [
+          { pattern: /inventory/, permissions: ["inventory.view"] },
+        ],
+      }),
+    ],
+  })
+  for (const [fields, allowed] of [
+    ["id", true],
+    ["inventory_quantity", false],
+    ["*auth", false],
+  ] as const) {
+    const h = harness("/admin/documents")
+    h.access.resolveRequest = configuration.resolveRequest
+    h.req.query.fields = fields
+    h.access.principal.mockResolvedValue({
+      ...principal,
+      is_superuser: false,
+      permissions: ["products.view"],
+    })
+    await h.run()
+    if (allowed) expect(h.next).toHaveBeenCalledWith()
+    else {
+      expect(h.res.status).toHaveBeenCalledWith(403)
+      expect(h.next).not.toHaveBeenCalled()
+    }
+  }
+  const unknown = harness("/admin/documents/Document_A/unregistered", "POST")
+  unknown.access.resolveRequest = configuration.resolveRequest
+  await unknown.run()
+  expect(unknown.res.status).toHaveBeenCalledWith(403)
+  expect(unknown.next).not.toHaveBeenCalled()
 })
 it.each([
   ["/admin/users/User_Target", "User_Target"],
@@ -405,7 +508,7 @@ it.each([
     await denied.run()
     expect(denied.res.status).toHaveBeenCalledWith(403)
     expect(denied.res.json).toHaveBeenCalledWith({
-      message: "Inventory access is required for these fields",
+      message: "Additional permissions are required for these fields",
     })
   }
 )
