@@ -1,7 +1,9 @@
 import assert from "node:assert/strict"
 import { test } from "vitest"
+import type { MedusaRequest } from "@medusajs/framework/http"
+import { createAccessConfig } from "../src/lib/access/config"
 import { createRequire } from "node:module"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
 import {
   additionalWritePermissions,
@@ -21,6 +23,19 @@ import { createPrincipal } from "./fixtures/access"
 import fieldInventory from "../src/lib/access/native-fields.json"
 
 const nativeRequire = createRequire(path.join(process.cwd(), "package.json"))
+const dashboardSource = (marker: string) => {
+  const directory = path.join(
+    path.dirname(nativeRequire.resolve("@medusajs/dashboard/package.json")),
+    "dist"
+  )
+  const file = readdirSync(directory)
+    .filter((file) => file.endsWith(".mjs"))
+    .find((file) =>
+      readFileSync(path.join(directory, file), "utf8").includes(marker)
+    )
+  assert.ok(file, `Inspect the pinned Dashboard source for ${marker}`)
+  return readFileSync(path.join(directory, file), "utf8")
+}
 
 const principal = createPrincipal({
   actor_id: "user_test",
@@ -109,6 +124,75 @@ test("native user management requires an active Superuser", () => {
     assert.equal(policyFor(method, path), null, `${method} ${path}`)
 })
 
+test("layout policy matches pinned native scopes and bounded list fields", async () => {
+  const scopedPermissions = async (body: unknown) =>
+    (
+      await createAccessConfig().resolveRequest({
+        method: "POST",
+        originalUrl: "/admin/layouts/product.details/configuration",
+        body,
+      } as MedusaRequest)
+    )?.policy.permissions ?? null
+  const { AdminSetLayoutConfiguration } = nativeRequire(
+    "@medusajs/medusa/api/admin/layouts/[zone]/configuration/validators"
+  )
+  const { defaultLayoutConfigurationFields } = nativeRequire(
+    "@medusajs/medusa/api/admin/layouts/configurations/query-config"
+  )
+  const personal = { configuration: { widgets: {} } }
+  assert.equal(AdminSetLayoutConfiguration.parse(personal).is_default, false)
+  for (const is_default of [false, true]) {
+    const body = { ...personal, is_default }
+    assert.equal(AdminSetLayoutConfiguration.parse(body).is_default, is_default)
+    assert.deepEqual(
+      await scopedPermissions(body),
+      is_default ? ["settings.manage"] : []
+    )
+  }
+  assert.deepEqual(await scopedPermissions(personal), [])
+  for (const is_default of ["false", "true", 0, 1, null, [], {}]) {
+    const body = { ...personal, is_default }
+    assert.throws(() => AdminSetLayoutConfiguration.parse(body))
+    assert.equal(await scopedPermissions(body), null)
+  }
+  assert.equal(
+    validateFieldSelection(
+      "layouts",
+      defaultLayoutConfigurationFields.join(",")
+    ),
+    true
+  )
+  for (const fields of [
+    "*",
+    "user.email",
+    "*user",
+    "configuration.secret",
+    "-unreviewed",
+  ])
+    assert.equal(validateFieldSelection("layouts", fields), false)
+  for (const [method, path] of [
+    ["GET", "/admin/layouts/configurations"],
+    ["GET", "/admin/layouts/product.details/configuration"],
+    ["POST", "/admin/layouts/product.details/configuration"],
+    ["DELETE", "/admin/layouts/product.details/configuration"],
+  ]) {
+    assert.equal(
+      inventory.some(
+        (route) =>
+          route.methods.includes(method) &&
+          (route.path === path ||
+            route.path === "/admin/layouts/:zone/configuration")
+      ),
+      true
+    )
+    assert.deepEqual(policyFor(method, path), { permissions: [] })
+    assert.equal(
+      can({ ...principal, active: false }, policyFor(method, path)!),
+      false
+    )
+  }
+})
+
 test("normalization cannot turn a denied request into an alternate operation", () => {
   assert.equal(normalizedPath("/ADMIN/products/?fields=id"), "/admin/products")
   for (const route of [
@@ -168,6 +252,90 @@ test("cross-domain fields and wildcard selections are bounded", () => {
     "+rbac_roles",
   ])
     assert.equal(validateFieldSelection("products", fields), false)
+})
+
+test("native product detail includes its reviewed shipping profile without expanding its relations", () => {
+  const source = dashboardSource(
+    "// src/routes/products/product-detail/constants.ts"
+  )
+  const fields = source.match(
+    /PRODUCT_DETAIL_FIELDS = getLinkedFields\(\s*"product",\s*"([^"]+)"\s*\)/
+  )?.[1]
+  assert.equal(fields, "*categories,*shipping_profile,-variants")
+  assert.equal(validateFieldSelection("products", fields), true)
+  for (const selection of [
+    "shipping_profile",
+    "-shipping_profile,-variants",
+    "+shipping_profile,-type",
+  ])
+    assert.equal(validateFieldSelection("products", selection), true, selection)
+  for (const selection of [
+    "*shipping_profile.shipping_options",
+    "shipping_profile.secret",
+    "shipping_profile.*",
+    "*shipping_profile.*",
+    "-shipping_profile.secret",
+    "*unreviewed_relation",
+    "-unreviewed_relation",
+    "*",
+  ])
+    assert.equal(
+      validateFieldSelection("products", selection),
+      false,
+      selection
+    )
+})
+
+test("all native Product and Variant detail field requests match their returned entity", () => {
+  const productPage = dashboardSource(
+    "// src/routes/products/product-detail/product-detail.tsx"
+  )
+  const breadcrumb = productPage.match(
+    /var ProductDetailBreadcrumb =[\s\S]*?fields:\s*"([^"]+)"/
+  )?.[1]
+  assert.equal(
+    breadcrumb,
+    "-type,-collection,-options,-tags,-images,-variants,-sales_channels"
+  )
+  assert.equal(validateFieldSelection("products", breadcrumb), true)
+  const variantTable = productPage.match(
+    /var ProductVariantSection =[\s\S]*?fields:\s*"([^"]+)"/
+  )?.[1]
+  assert.equal(
+    variantTable,
+    "title,sku,thumbnail,*options,created_at,*inventory_items.inventory.location_levels,inventory_quantity,manage_inventory"
+  )
+  const variantDetailSource = dashboardSource(
+    "// src/routes/product-variants/product-variant-detail/constants.ts"
+  )
+  const variantDetail = variantDetailSource.match(
+    /VARIANT_DETAIL_FIELDS = "([^"]+)"/
+  )?.[1]
+  assert.equal(
+    variantDetail,
+    "*inventory_items,*inventory_items.inventory,*inventory_items.inventory.location_levels,*options,*options.option,*prices,*prices.price_rules,+images.id,+images.url,+images.variants.id"
+  )
+  for (const fields of [variantTable, variantDetail])
+    assert.equal(
+      validateFieldSelection("product-variants", fields),
+      true,
+      fields
+    )
+  for (const fields of [
+    "*inventory_items.*",
+    "*inventory_items.inventory.*",
+    "inventory_items.inventory.secret",
+    "inventory_items.inventory.location_levels.stock_locations",
+    "*prices.price_rules.price_set",
+    "images.variants.product.orders",
+    "*",
+  ])
+    assert.equal(
+      validateFieldSelection("product-variants", fields),
+      false,
+      fields
+    )
+  assert.equal(validateFieldSelection("products", "*inventory_items"), false)
 })
 
 test("nested and batch writes require their sensitive action grants", () => {

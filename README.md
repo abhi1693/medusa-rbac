@@ -68,6 +68,7 @@ import { defineConfig } from "@medusajs/framework/utils"
 import type { AccessControlOptions } from "@abhi1693/medusa-rbac/config"
 import { definePermission } from "@abhi1693/medusa-rbac/define-permission"
 import { defineRole } from "@abhi1693/medusa-rbac/roles"
+import { defineResource } from "@abhi1693/medusa-rbac/resources"
 
 const documentsRead = definePermission({
   id: "documents.read",
@@ -85,12 +86,20 @@ const access: AccessControlOptions = {
       permissions: [documentsRead[0]],
     }),
   ],
-  routes: [
-    {
-      method: "GET",
-      path: "/admin/documents/:id",
-      permissions: ["documents.read"],
-    },
+  resources: [
+    defineResource({
+      key: "documents",
+      root: "documents",
+      actorTypes: ["user"],
+      profile: {
+        actions: { GET: "read" },
+        item: {
+          parameter: "id",
+          profile: { actions: { GET: "read" } },
+        },
+      },
+      operations: { read: { permissions: [documentsRead[0]] } },
+    }),
   ],
 }
 
@@ -128,8 +137,56 @@ Open **Settings → Access management** to inspect roles and permissions, create
 | `permissions` | Additional `[identifier, label, group]` definitions, including tuples returned by `definePermission({ id, label, group })`. Duplicate or invalid identifiers fail startup. Native identifiers remain registered. |
 | `roles` | Optional application-owned roles declared with `defineRole({ key, name, permissions, rules })`. Definitions are synchronized explicitly and grant no automatic assignments. |
 | `routes` | Explicit method/path policies for custom Admin APIs. Paths support named segments such as `:id`; `HEAD` uses the corresponding `GET` policy. Require every listed permission, or set `superuser: true`. |
+| `resources` | Reusable structural profiles and capability policies for application/plugin-owned APIs. Declare collection/item actions, nested resources, commands, actor types and scope requirements once. Unknown operations remain denied. Native and access-management resources cannot be replaced. |
 | `contextResolvers` | Async functions deriving rule context from trusted application data. Actor identity, method and route remain server-owned. |
 | `actors` | `{ type, validate(id, request), list?(query, request) }` providers for custom actor types. Validation establishes identity; the optional paginated search adapter supplies account-picker results. Native users/customers use their owning Medusa modules. |
+
+### Resource capabilities
+
+Register a resource when several endpoints share the same authorization model. The public `@abhi1693/medusa-rbac/resources` entry provides `defineResource`, `crudProfile`, `commandProfile` and `actorOwnedPreferences`, together with their types.
+
+```ts
+import {
+  defineResource,
+  crudProfile,
+  commandProfile,
+} from "@abhi1693/medusa-rbac/resources"
+
+const documents = defineResource({
+  key: "documents",
+  root: "documents",
+  actorTypes: ["user"],
+  fields: ["id", "title"],
+  profile: {
+    ...crudProfile(),
+    children: { export: commandProfile("export") },
+  },
+  operations: {
+    read: { permissions: ["documents.read"] },
+    create: { permissions: ["documents.write"] },
+    update: { permissions: ["documents.write"] },
+    delete: { permissions: ["documents.write"] },
+    export: { permissions: ["documents.read", "documents.export"] },
+  },
+})
+
+const access = {
+  permissions: [
+    ["documents.read", "Read documents", "Documents"],
+    ["documents.write", "Manage documents", "Documents"],
+    ["documents.export", "Export documents", "Documents"],
+  ],
+  resources: [documents],
+}
+```
+
+This profile describes collection reads/creation, item reads/updates/deletion, and the export command under `/admin/documents`. Literal commands take precedence over parameterized item routes for the requested method. It does not authorize undeclared descendants or register HTTP handlers. Compose `children` and `item` profiles for nested APIs instead of repeating URL rules. Register each custom permission through `permissions` as usual.
+
+An operation can declare separate `personal` and `shared` permission lists through `scopes`. `actorOwnedPreferences` supplies reusable preference actions with a strict boolean shared-scope selector. The owning handler must enforce record ownership; the profile does not infer ownership from a client-supplied user ID. For existing-record scope, provide `resolveScope(request, operation)` and resolve the record through its owning module's public API. Route parameter values retain their original case. Return `null` to deny the operation.
+
+For domain-specific changes, an action's `payload(request, operation)` callback returns additional registered permission identifiers, or `null` to deny the request. Field requirements can associate a selection pattern with additional permissions. These trusted server callbacks extend the existing evaluator without changes to its middleware. Registrations reject native-resource collisions, conflicting roots, unregistered permissions and malformed or recursive profiles at startup.
+
+Resource registration integrates with the plugin's Admin enforcement. Other namespaces and actors continue to use explicit authentication and the public permission middleware or service checks. `resolveRequest(request)` returns the complete operation descriptor, including scope and payload requirements; `operationAllowed(principal, descriptor, allows)` evaluates it against an established principal and trusted permission context. `policyFor(method, path)` describes static requirements only and must not authorize a request that has scope or payload-dependent requirements.
 
 ## Roles defined in code
 
@@ -232,6 +289,7 @@ The role editor groups permissions by area, supports search, group selection and
 
 - Every Admin operation requires a native user identity. Customer and secret API-key principals cannot inherit staff access.
 - Native commerce operations use a reviewed Medusa route/field inventory. Unknown methods/routes, arbitrary workflow execution, API-key management and native RBAC endpoints deny, including for Superuser. Extension policies cannot reopen native or access-management routes.
+- Active staff can manage their personal native Admin layouts. Shared layout changes require `settings.manage`; native actor ownership and bounded field selection remain enforced.
 - Role, invitation and staff administration require an active Superuser. Ordinary roles cannot delegate this authority. The system role and its name are protected, self-deletion is rejected, and transactional locking preserves at least one active Superuser.
 - Role/staff writes require record versions. Assignments, access mutations and before/after audit events commit atomically. Access is read on every request; Admin refreshes its access state while visible.
 - Managed invitations compose native workflows and activate assigned roles before first login. Pending invitations reserve their roles. Account deletion and invitation failures use compensation.

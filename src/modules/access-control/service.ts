@@ -188,8 +188,12 @@ class AccessControlService extends MedusaService({
       invalid("This role name is reserved by application configuration")
     return normalized
   }
+  /** Static inspection only; never a substitute for request resolution and enforcement. */
   policyFor(method: string, path: string) {
     return this.configuration.policyFor(method, path)
+  }
+  resolveRequest(request: MedusaRequest) {
+    return this.configuration.resolveRequest(request)
   }
   async permissionContext(request: MedusaRequest): Promise<PermissionContext> {
     const auth = (request as any).auth_context
