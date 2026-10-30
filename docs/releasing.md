@@ -54,6 +54,8 @@ npm view @abhi1693/medusa-rbac dist-tags
 
 The workflow downloads the registry archive and compares it with the prepared package. Consumers can also install into an isolated application and run `npm audit signatures` to verify registry signatures and npm provenance. A published GitHub release and a successful npm publication are separate results; check both.
 
+npm [scans new publications before making them installable](https://github.blog/changelog/2026-07-28-npm-publish-time-malware-scanning-and-dual-use-metadata/). Availability typically takes around five minutes and can take 15 minutes or longer. The publisher waits up to 30 minutes for version metadata, the registry archive and the distribution tag to converge, reporting progress without submitting another publication. If verification times out, use the tagged retry command after npm finishes processing; the existing archive must still match exactly.
+
 ## Publication readiness
 
 Require successful security, native compatibility and package checks for the final commit before publishing a GitHub release or an npm package. The security workflow remains blocking. The refreshed dependency tree passes the high-severity audit; [lower-severity upstream findings](dependency-compatibility.md#validation) remain. Local package verification provides checksums and package checks; GitHub build attestation and npm registry provenance require their respective hosted workflows.

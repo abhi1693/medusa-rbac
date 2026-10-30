@@ -67,7 +67,8 @@ function registry(
 ) {
   const calls = [],
     uploads = [],
-    waits = []
+    waits = [],
+    events = []
   let published = exists
   let reads = 0
   const fetchImpl = async (url) => {
@@ -96,6 +97,7 @@ function registry(
     calls,
     uploads,
     waits,
+    events,
     fetchImpl,
     runNpm: async (args) => {
       uploads.push(args)
@@ -103,6 +105,7 @@ function registry(
       latest = "0.0.1"
     },
     sleep: async (milliseconds) => waits.push(milliseconds),
+    report: (event) => events.push(event),
   }
 }
 
@@ -263,19 +266,45 @@ test("absent older releases cannot move latest backwards", async (t) => {
   assert.deepEqual(r.uploads, [])
 })
 
-test("post-publication convergence is bounded to five attempts and eight seconds of delays", async (t) => {
+test("post-publication convergence is bounded to 31 attempts and thirty minutes of delays", async (t) => {
   const f = await fixture(t),
-    r = registry(f, { pending: 4 })
+    r = registry(f, { pending: 30 })
   assert.equal((await publishArchive({ ...f, ...r })).status, "published")
-  assert.equal(r.waits.length, 4)
+  assert.equal(r.waits.length, 30)
   assert.equal(
     r.waits.reduce((total, value) => total + value, 0),
-    8000
+    1_800_000
   )
-  const never = registry(f, { pending: 5 })
-  await assert.rejects(publishArchive({ ...f, ...never }), /5 attempts/)
-  assert.equal(never.calls.filter((url) => url.endsWith("/0.0.1")).length, 6)
-  assert.deepEqual(never.waits, [2000, 2000, 2000, 2000])
+  const never = registry(f, { pending: 31 })
+  await assert.rejects(publishArchive({ ...f, ...never }), /31 attempts/)
+  assert.equal(never.calls.filter((url) => url.endsWith("/0.0.1")).length, 32)
+  assert.equal(never.uploads.length, 1)
+  assert.deepEqual(never.waits, Array(30).fill(60_000))
+})
+
+test("npm processing can delay registry visibility for twelve minutes without another publish or false completion", async (t) => {
+  const f = await fixture(t),
+    r = registry(f, { pending: 12 })
+  const result = await publishArchive({ ...f, ...r })
+  assert.equal(result.status, "published")
+  assert.equal(r.uploads.length, 1)
+  assert.deepEqual(r.waits, Array(12).fill(60_000))
+  assert.equal(r.events.length, 12)
+  assert.ok(
+    r.events.every(
+      (event) =>
+        event.status === "waiting-for-registry" &&
+        event.stage === "npm-processing"
+    )
+  )
+  assert.equal(r.events.at(-1).attempt, 12)
+  assert.ok(
+    r.events.every(
+      (event) =>
+        event.retry_in_seconds === 60 &&
+        /no additional publish/.test(event.message)
+    )
+  )
 })
 
 test("registry provenance metadata is reported when available and malformed metadata fails", async (t) => {
@@ -350,7 +379,10 @@ test("a lost npm response succeeds only after the uploaded archive is verified",
     }),
     (error) => error === lost
   )
-  assert.deepEqual(changed.waits, [2000, 2000, 2000, 2000])
+  assert.deepEqual(changed.waits, Array(30).fill(60_000))
+  assert.ok(
+    changed.events.every((event) => event.stage === "verify-publish-outcome")
+  )
 })
 
 test("a denied publication without registry bytes preserves the original npm error", async (t) => {
@@ -367,5 +399,6 @@ test("a denied publication without registry bytes preserves the original npm err
     }),
     (error) => error === denied
   )
-  assert.deepEqual(r.waits, [2000, 2000, 2000, 2000])
+  assert.deepEqual(r.waits, Array(30).fill(60_000))
+  assert.ok(r.events.every((event) => event.stage === "verify-publish-outcome"))
 })
