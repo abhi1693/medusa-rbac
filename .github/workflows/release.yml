@@ -96,3 +96,11 @@ jobs:
             gh release create "$RELEASE_TAG" "$PACKAGE_PATH" "$CHECKSUMS_PATH" "$RELEASE_OUTPUT_DIR/provenance.json" \
               --draft --target "$GITHUB_SHA" --title "$RELEASE_TAG" --notes-file "$notes"
           fi
+          verify="$RUNNER_TEMP/rbac-release-verify"
+          mkdir -p "$verify"
+          gh release download "$RELEASE_TAG" --pattern "$(basename "$PACKAGE_PATH")" \
+            --pattern SHA256SUMS --pattern provenance.json --dir "$verify" --clobber
+          cmp "$CHECKSUMS_PATH" "$verify/SHA256SUMS"
+          (cd "$verify" && sha256sum -c SHA256SUMS)
+          gh attestation verify "$verify/$(basename "$PACKAGE_PATH")" \
+            --repo "$GH_REPO" --bundle "$verify/provenance.json"
