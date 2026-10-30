@@ -16,6 +16,15 @@ npm install 'git+https://github.com/abhi1693/medusa-rbac.git#<commit>'
 
 The Git dependency runs `prepare` to build server and Admin extensions. Node 22.22 or newer is required.
 
+If npm reports that this dependency's `prepare` script was skipped, review the pinned commit and its build script, then approve that dependency's install scripts:
+
+```sh
+npm install-scripts approve @abhi1693/medusa-rbac
+npm ci
+```
+
+Commit the generated `allowScripts` policy in your application's `package.json`. Keep the approval pinned to the reviewed Git commit and update it when repinning the dependency. See [npm's install-script approvals](https://docs.npmjs.com/cli/v11/commands/npm-install-scripts/).
+
 ```ts
 // medusa-config.ts
 import { defineConfig } from "@medusajs/framework/utils"
