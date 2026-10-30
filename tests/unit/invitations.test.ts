@@ -18,6 +18,8 @@ function harness() {
   const users = {
     validateInviteToken: vi.fn().mockResolvedValue(invite),
     retrieveInvite: vi.fn().mockResolvedValue(invite),
+    deleteInvites: vi.fn(),
+    updateInvites: vi.fn(),
   }
   const auth = {
     retrieveAuthIdentity: vi.fn().mockResolvedValue({
@@ -158,11 +160,80 @@ it.each([true, false])(
     expect(h.access.mutate).toHaveBeenCalledTimes(managed ? 1 : 0)
   }
 )
+it.each([
+  ["POST", "/access/invites/accept?token=token"],
+  ["DELETE", "/admin/access/invites/inv_test"],
+])(
+  "redirects native managed invitation %s to its guarded workflow",
+  async (method, destination) => {
+    const h = harness()
+    const next = vi.fn()
+    const res = { setHeader: vi.fn(), redirect: vi.fn() }
+    const body = { email: h.invite.email, first_name: "Invited" }
+    await protectManagedInvites(
+      {
+        method,
+        scope: h.container,
+        params: { id: h.invite.id },
+        query: { token: "token" },
+        body,
+      } as any,
+      res as any,
+      next
+    )
+    expect(res.redirect).toHaveBeenCalledExactlyOnceWith(307, destination)
+    expect(res.setHeader).toHaveBeenCalledExactlyOnceWith(
+      "Cache-Control",
+      "no-store"
+    )
+    expect(next).not.toHaveBeenCalled()
+    expect(h.users.validateInviteToken).toHaveBeenCalledTimes(
+      method === "POST" ? 1 : 0
+    )
+    expect(h.users.retrieveInvite).toHaveBeenCalledTimes(
+      method === "DELETE" ? 1 : 0
+    )
+    expect(h.users.deleteInvites).not.toHaveBeenCalled()
+    expect(h.users.updateInvites).not.toHaveBeenCalled()
+    expect(h.access.mutate).not.toHaveBeenCalled()
+    expect(h.auth.retrieveAuthIdentity).not.toHaveBeenCalled()
+    expect(body).toEqual({ email: h.invite.email, first_name: "Invited" })
+  }
+)
+it.each([
+  ["POST", null],
+  ["POST", {}],
+  ["DELETE", null],
+  ["DELETE", {}],
+])("preserves unmanaged native invitation %s: %s", async (method, metadata) => {
+  const h = harness()
+  const next = vi.fn()
+  const res = { setHeader: vi.fn(), redirect: vi.fn() }
+  h.users.validateInviteToken.mockResolvedValue({ ...h.invite, metadata })
+  h.users.retrieveInvite.mockResolvedValue({ ...h.invite, metadata })
+  await protectManagedInvites(
+    {
+      method,
+      scope: h.container,
+      params: { id: h.invite.id },
+      query: { token: "token" },
+    } as any,
+    res as any,
+    next
+  )
+  expect(next).toHaveBeenCalledExactlyOnceWith()
+  expect(res.redirect).not.toHaveBeenCalled()
+  expect(res.setHeader).not.toHaveBeenCalled()
+})
 it.each(["POST", "DELETE"])(
-  "prevents bypassing managed invitation access through native %s",
+  "passes native invitation %s lookup errors to the error handler",
   async (method) => {
     const h = harness()
     const next = vi.fn()
+    const res = { setHeader: vi.fn(), redirect: vi.fn() }
+    const error = new Error("Invitation is unavailable")
+    h.users.validateInviteToken.mockRejectedValue(error)
+    h.users.retrieveInvite.mockRejectedValue(error)
     await protectManagedInvites(
       {
         method,
@@ -170,23 +241,66 @@ it.each(["POST", "DELETE"])(
         params: { id: h.invite.id },
         query: { token: "token" },
       } as any,
-      {} as any,
+      res as any,
       next
     )
-    expect(next.mock.calls[0][0].message).toContain("role assignment")
+    expect(next).toHaveBeenCalledExactlyOnceWith(error)
+    expect(res.redirect).not.toHaveBeenCalled()
+    expect(h.access.mutate).not.toHaveBeenCalled()
   }
 )
-it.each([null, {}])(
-  "allows native legacy invitations: %s",
-  async (metadata) => {
+it.each([undefined, "", [], ["token"], { token: "token" }])(
+  "rejects malformed native invitation tokens before resolving an invitation: %s",
+  async (token) => {
     const h = harness()
     const next = vi.fn()
-    h.users.validateInviteToken.mockResolvedValue({ ...h.invite, metadata })
+    const res = { setHeader: vi.fn(), redirect: vi.fn() }
     await protectManagedInvites(
-      { method: "POST", scope: h.container, query: {} } as any,
-      {} as any,
+      { method: "POST", scope: h.container, query: { token } } as any,
+      res as any,
       next
     )
-    expect(next).toHaveBeenCalledWith()
+    expect(next).toHaveBeenCalledExactlyOnceWith(expect.any(Error))
+    expect(h.users.validateInviteToken).not.toHaveBeenCalled()
+    expect(res.redirect).not.toHaveBeenCalled()
   }
 )
+it("encodes the validated invitation token and canonical invitation ID in same-origin redirects", async () => {
+  const h = harness()
+  const next = vi.fn()
+  const res = { setHeader: vi.fn(), redirect: vi.fn() }
+  const token = "signed+/token=?&other=value#part"
+  await protectManagedInvites(
+    {
+      method: "POST",
+      scope: h.container,
+      query: { token, fields: "id,email" },
+    } as any,
+    res as any,
+    next
+  )
+  expect(h.users.validateInviteToken).toHaveBeenCalledExactlyOnceWith(token)
+  expect(res.redirect).toHaveBeenLastCalledWith(
+    307,
+    "/access/invites/accept?token=signed%2B%2Ftoken%3D%3F%26other%3Dvalue%23part"
+  )
+  h.users.retrieveInvite.mockResolvedValue({
+    ...h.invite,
+    id: "inv/canonical?with=query#fragment",
+  })
+  await protectManagedInvites(
+    {
+      method: "DELETE",
+      scope: h.container,
+      params: { id: "requested-id" },
+    } as any,
+    res as any,
+    next
+  )
+  expect(h.users.retrieveInvite).toHaveBeenCalledExactlyOnceWith("requested-id")
+  expect(res.redirect).toHaveBeenLastCalledWith(
+    307,
+    "/admin/access/invites/inv%2Fcanonical%3Fwith%3Dquery%23fragment"
+  )
+  expect(next).not.toHaveBeenCalled()
+})

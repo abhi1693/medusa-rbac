@@ -54,8 +54,14 @@ test("native and custom access fail closed", () => {
     "/admin/rbac/roles",
   ])
     assert.equal(policyFor("GET", route), null)
-  assert.equal(policyFor("POST", "/admin/users/user_test"), null)
-  assert.equal(policyFor("DELETE", "/admin/users/user_test"), null)
+  assert.equal(
+    can(principal, policyFor("POST", "/admin/users/user_test")!),
+    false
+  )
+  assert.equal(
+    can(principal, policyFor("DELETE", "/admin/users/user_test")!),
+    false
+  )
   assert.equal(
     can(
       { ...principal, permissions: ["products.edit"] },
@@ -71,6 +77,36 @@ test("native and custom access fail closed", () => {
   assert.deepEqual(policyFor("GET", "/admin/access/roles/role_test"), {
     permissions: ["roles.view"],
   })
+})
+
+test("native user management requires an active Superuser", () => {
+  const superuser = createPrincipal({ is_superuser: true })
+  const staff = createPrincipal({
+    is_superuser: false,
+    permissions: ["staff.view"],
+  })
+  for (const [method, path] of [
+    ["POST", "/admin/users/user_other"],
+    ["POST", "/admin/users/user_other/reset-password"],
+    ["DELETE", "/admin/users/user_other"],
+  ]) {
+    const policy = policyFor(method, path)
+    assert.ok(policy, path)
+    assert.equal(can(superuser, policy), true, path)
+    assert.equal(can(staff, policy), false, path)
+    assert.equal(can({ ...superuser, active: false }, policy), false, path)
+  }
+  for (const [method, path] of [
+    ["POST", "/admin/users"],
+    ["PUT", "/admin/users/user_other"],
+    ["PATCH", "/admin/users/user_other"],
+    ["POST", "/admin/users/user_other/auth-providers"],
+    ["POST", "/admin/users/user_other/roles"],
+    ["DELETE", "/admin/users/user_other/roles/role_test"],
+    ["POST", "/admin/users/user_other/reset-password/unreviewed"],
+    ["POST", "/admin/users/user_other/unreviewed"],
+  ])
+    assert.equal(policyFor(method, path), null, `${method} ${path}`)
 })
 
 test("normalization cannot turn a denied request into an alternate operation", () => {

@@ -206,10 +206,16 @@ export function policyFor(method: string, path: string): Policy | null {
   )
   if (!route) return null
   const resource = path.split("/")[2]
-  if (resource === "users")
-    return verb === "GET"
-      ? { permissions: ["staff.view"], superuser: true }
-      : null
+  if (resource === "users") {
+    if (verb === "GET") return { permissions: ["staff.view"], superuser: true }
+    if (
+      (verb === "POST" &&
+        /^\/admin\/users\/[^/]+(?:\/reset-password)?$/.test(path)) ||
+      (verb === "DELETE" && /^\/admin\/users\/[^/]+$/.test(path))
+    )
+      return { permissions: [], superuser: true }
+    return null
+  }
   if (resource === "invites") return { permissions: [], superuser: true }
   const policies = resourcePolicies[resource]
   if (!policies) return null

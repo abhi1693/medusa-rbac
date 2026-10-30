@@ -52,6 +52,7 @@ function harness(path = "/admin/products", method = "GET", body: unknown = {}) {
   const res: any = {
     status: vi.fn().mockReturnThis(),
     json: vi.fn().mockReturnThis(),
+    redirect: vi.fn().mockReturnThis(),
     setHeader: vi.fn(),
   }
   const next = vi.fn()
@@ -118,6 +119,49 @@ it("allows only own safe profile fields without role assignments", async () => {
   expect(h.next).toHaveBeenCalledWith()
   expect(h.req.query.fields).toBe("id,email,first_name,last_name,avatar_url")
   expect(h.access.principal).not.toHaveBeenCalled()
+})
+it.each([
+  ["/admin/users/User_Target", "User_Target"],
+  ["/ADMIN/USERS/User_Target/?fields=id", "User_Target"],
+  ["/admin/users/User%5FTarget", "User_Target"],
+  ["/admin/users/user%3Ftarget", "user%3Ftarget"],
+])("delegates authorized native deletion safely: %s", async (path, target) => {
+  const h = harness(path, "DELETE")
+  await h.run()
+  expect(h.res.redirect).toHaveBeenCalledWith(
+    307,
+    `/admin/access/staff/${target}`
+  )
+  expect(h.res.setHeader).toHaveBeenCalledWith("Cache-Control", "no-store")
+  expect(h.next).not.toHaveBeenCalled()
+  expect(h.access.mutate).not.toHaveBeenCalled()
+})
+it.each([
+  "/admin/users/target/roles/role",
+  "/admin/users/target/reset-password",
+  "/admin/users/%2ftarget",
+  "/admin/users/%252ftarget",
+  "/admin/users//target",
+])("never delegates unreviewed or ambiguous deletion: %s", async (path) => {
+  const h = harness(path, "DELETE")
+  await h.run()
+  expect(h.res.status).toHaveBeenCalledWith(403)
+  expect(h.res.redirect).not.toHaveBeenCalled()
+  expect(h.next).not.toHaveBeenCalled()
+})
+it("denies native management before delegation for ordinary staff", async () => {
+  for (const [method, path] of [
+    ["DELETE", "/admin/users/target"],
+    ["POST", "/admin/users/target"],
+    ["POST", "/admin/users/target/reset-password"],
+  ]) {
+    const h = harness(path, method)
+    h.access.principal.mockResolvedValue({ ...principal, is_superuser: false })
+    await h.run()
+    expect(h.res.status).toHaveBeenCalledWith(403)
+    expect(h.res.redirect).not.toHaveBeenCalled()
+    expect(h.next).not.toHaveBeenCalled()
+  }
 })
 it.each(["GET", "HEAD"])(
   "bounds self context even for inactive staff (%s)",

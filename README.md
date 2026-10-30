@@ -202,15 +202,31 @@ The role editor groups permissions by area, supports search, group selection and
 
 ## Administration and invitations
 
-The plugin uses supported Admin routes and widget zones with Medusa UI tables, drawers and focus modals. It requires no modifications to Medusa packages. **Settings → Access management** includes Roles, Permissions, Users, Invitations, Activity and My access. Each role has a shareable detail page with readable permission groups, scoped rules, its management source, assigned-account counts, paginated account assignments and pending invitation counts. The native user-detail page includes an editable Roles widget. Safe user deletion is available in the plugin’s Users table; self-deletion and deleting the last active Superuser are rejected.
+The plugin uses supported Admin routes and widget zones with Medusa UI tables, drawers and focus modals. It requires no modifications to Medusa packages. **Settings → Access management** includes Roles, Permissions, Users, Invitations, Activity and My access. Each role has a shareable detail page with readable permission groups, scoped rules, its management source, assigned-account counts, paginated account assignments and pending invitation counts. The native user-detail page includes an editable Roles widget. Superusers can manage profiles, password resets and account deletion through Medusa's Users screen. Deleting an account from either Users screen applies the same safeguards: self-deletion and deleting the last active Superuser are rejected.
 
 Create an invitation in the Invitations tab, select its roles and share the generated private link. Links honor the application's Admin base path and open the acceptance form through the supported login widget. Acceptance uses native EmailPass registration, associates the identity with the new user and activates the selected roles before first login. A failed acceptance restores the invitation and identity association so the same credentials can retry. The workflow composes public user-creation, invite-deletion and grouped-event steps; events publish after successful completion.
 
-Native invitation events remain available for an application notification subscriber. To deliver role-bound invitations by email, configure that subscriber to use the plugin’s login URL: `<admin-origin>/<admin-path>/login?rbac_invite=<token>`. Link creation itself does not require an email provider. Native invitation pages remain available for their normal flows; use the plugin's invitation screen when assigning roles during signup.
+Native invitation events remain available for an application notification subscriber. To deliver role-bound invitations by email, configure that subscriber to use the plugin’s login URL: `<admin-origin>/<admin-path>/login?rbac_invite=<token>`. Link creation itself does not require an email provider. Native invitation acceptance and deletion preserve managed role assignments and the same safeguards. Create invitations in the plugin's Invitations tab when selecting roles during signup.
 
 The native Admin keeps its navigation, account menu and error handling. The topbar **My access** link remains available when an operation is denied. Permission changes refresh access and revalidate native routes without requiring another login. Access management authorizes every read and write on the server.
 
 The plugin works independently of Admin Kit. A host may separately install [medusa-admin-kit](https://github.com/zanreal-labs/medusa-admin-kit) for its shared Catalog table and cross-plugin column registry.
+
+## Account management APIs
+
+Account deletion and managed invitations use these canonical endpoints:
+
+| Operation | Endpoint |
+| --- | --- |
+| Delete a user | `DELETE /admin/access/staff/:id` |
+| Delete a managed invitation | `DELETE /admin/access/invites/:id` |
+| Accept a managed invitation | `POST /access/invites/accept?token=<token>` |
+
+User and invitation deletion require an active native-user Superuser. Invitation acceptance requires a valid invitation token and an unregistered native user authentication identity. The canonical endpoints run compensatable workflows that coordinate native User/Auth operations with access assignments and auditing. User deletion returns `{ id, object: "user", deleted: true }`; invitation deletion returns `{ id, object: "invite", deleted: true }`.
+
+Public middleware delegates native user deletion and managed invitation deletion/acceptance to these endpoints using HTTP 307. The redirect preserves the method and body, and each destination independently authenticates and validates the operation. Native Medusa handlers remain unchanged. Updates to another user's profile and password-reset token generation use native endpoints with Superuser authorization. Users retain restricted editing of their own profile.
+
+The Medusa 2.22.1 SDK follows these redirects using its normal session or bearer authentication. Redirect destinations are fixed paths on the same backend origin. Expose backend APIs at the origin root; the Admin UI may use its configured base path. API clients that disable redirect following should call the canonical endpoints directly. A redirect response itself performs no account mutation.
 
 ## Permission diagnostics
 
