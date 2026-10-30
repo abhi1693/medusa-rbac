@@ -67,19 +67,19 @@
     "release:package": "npm run build && node scripts/package-release.mjs"
   },
   "peerDependencies": {
-    "@medusajs/dashboard": "^2.22.1",
-    "@medusajs/admin-sdk": "^2.22.1",
-    "@medusajs/framework": "^2.22.1",
-    "@medusajs/icons": "^2.22.1",
-    "@medusajs/js-sdk": "^2.22.1",
-    "@medusajs/medusa": "^2.22.1",
-    "@medusajs/ui": "^4.2.8",
+    "@medusajs/dashboard": "^2.22.2",
+    "@medusajs/admin-sdk": "^2.22.2",
+    "@medusajs/framework": "^2.22.2",
+    "@medusajs/icons": "^2.22.2",
+    "@medusajs/js-sdk": "^2.22.2",
+    "@medusajs/medusa": "^2.22.2",
+    "@medusajs/ui": "^4.2.9",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "@tanstack/react-query": "^5.64.2"
   },
   "devDependencies": {
-    "@medusajs/dashboard": "2.22.1",
+    "@medusajs/dashboard": "2.22.2",
     "@playwright/test": "1.64.1",
     "@swc/core": "^1.15.0",
     "@testing-library/dom": "10.4.2",
@@ -99,14 +99,14 @@
     "typescript": "^5.9.0",
     "vite": "7.3.7",
     "vitest": "4.1.12",
-    "@medusajs/admin-sdk": "2.22.1",
-    "@medusajs/cli": "2.22.1",
-    "@medusajs/draft-order": "2.22.1",
-    "@medusajs/framework": "2.22.1",
-    "@medusajs/icons": "2.22.1",
-    "@medusajs/js-sdk": "2.22.1",
-    "@medusajs/medusa": "2.22.1",
-    "@medusajs/ui": "4.2.8",
+    "@medusajs/admin-sdk": "2.22.2",
+    "@medusajs/cli": "2.22.2",
+    "@medusajs/draft-order": "2.22.2",
+    "@medusajs/framework": "2.22.2",
+    "@medusajs/icons": "2.22.2",
+    "@medusajs/js-sdk": "2.22.2",
+    "@medusajs/medusa": "2.22.2",
+    "@medusajs/ui": "4.2.9",
     "@tanstack/react-query": "5.64.2",
     "esbuild": "0.28.2"
   },
@@ -131,5 +131,11 @@
   ],
   "publishConfig": {
     "access": "public"
+  },
+  "overrides": {
+    "@medusajs/utils@2.22.2": {
+      "@graphql-codegen/core": "6.2.2",
+      "@graphql-codegen/typescript": "6.1.2"
+    }
   }
 }

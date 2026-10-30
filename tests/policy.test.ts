@@ -211,7 +211,7 @@ test("nested and batch writes require their sensitive action grants", () => {
 test("native route snapshot matches installed Medusa route methods", () => {
   assert.equal(
     nativeRequire("@medusajs/medusa/package.json").version,
-    "2.22.1",
+    "2.22.2",
     "Review native RBAC policies and regenerate the snapshot before upgrading Medusa"
   )
   const base = path.dirname(
@@ -239,8 +239,8 @@ test("native route snapshot matches installed Medusa route methods", () => {
 test("field snapshot includes evaluated native exports with different names and spreads", () => {
   assert.equal(
     nativeRequire("@medusajs/dashboard/package.json").version,
-    "2.22.1",
-    "Review the native 403 compatibility patch before upgrading Dashboard"
+    "2.22.2",
+    "Review native field selections before upgrading Dashboard"
   )
   const base = path.join(
     path.dirname(nativeRequire.resolve("@medusajs/medusa/package.json")),

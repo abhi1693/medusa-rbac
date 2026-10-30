@@ -15,7 +15,13 @@ Verify a downloaded release with `sha256sum -c SHA256SUMS`. When provenance is a
 
 ## Publication readiness
 
-The initial `0.0.1` draft has high-severity dependency audit findings in the locked Medusa 2.22.1 toolchain. Resolve the applicable upstream advisories and rerun the dependency and package checks before publishing a GitHub release or an npm package. The security workflow remains blocking. A locally prepared draft has verified checksums and package contents, but has no GitHub OIDC provenance unless the preparation workflow generated it.
+Require successful security, native compatibility and package checks for the final commit before publishing a GitHub release or an npm package. The security workflow remains blocking. The refreshed dependency tree passes the high-severity audit; [lower-severity upstream findings](dependency-compatibility.md#validation) remain. The `0.0.1` release is a prepared, unpublished draft. A locally prepared draft has verified checksums and package contents, but has no GitHub OIDC provenance unless the preparation workflow generated it.
+
+## Compatibility baseline
+
+Medusa 2.22.2 is the minimum supported version and the exact version used for validation and native route/field snapshots. Keep the Medusa package versions aligned; the corresponding Admin components use `@medusajs/ui` 4.2.9. Review the scoped [dependency compatibility configuration](dependency-compatibility.md). Regenerate the snapshots and validate the installed package when changing this baseline.
+
+The [official Medusa 2.22.2 release notes](https://github.com/medusajs/medusa/releases/tag/v2.22.2), reviewed on 2026-10-30, describe dependency updates across the server, CLI and Admin. They include Vite 7.3.7, errors for invalid `BigNumber`/`MathBN` inputs or invalid middleware body-size limits, and removal of the unused Tailwind Forms dependency. The plugin does not rely on these invalid-input behaviors or load Tailwind Forms. Use the supported upstream versions and rerun the compatibility checks after installation.
 
 ## Workflow references
 

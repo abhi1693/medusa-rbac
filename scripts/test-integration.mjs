@@ -1,5 +1,12 @@
 import { spawn } from "node:child_process"
-import { mkdtemp, writeFile, symlink, copyFile, rm } from "node:fs/promises"
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  writeFile,
+  symlink,
+  rm,
+} from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { randomBytes } from "node:crypto"
@@ -56,16 +63,54 @@ try {
     path.join(host, "node_modules"),
     "dir"
   )
-  await copyFile(
-    path.join(root, "tsconfig.json"),
-    path.join(host, "tsconfig.json")
+  const tsconfig = JSON.parse(
+    await readFile(path.join(root, "tsconfig.json"), "utf8")
+  )
+  tsconfig.include.push(".medusa/types/**/*.d.ts")
+  await writeFile(path.join(host, "tsconfig.json"), JSON.stringify(tsconfig))
+  await mkdir(path.join(host, "src"))
+  await writeFile(
+    path.join(host, "src/query-types.ts"),
+    `
+import type { RemoteQueryEntryPoints as Query } from "@medusajs/framework/types"
+
+type Equal<Left, Right> =
+  (<Value>() => Value extends Left ? 1 : 2) extends
+  (<Value>() => Value extends Right ? 1 : 2) ? true : false
+type Check<Value extends true> = Value
+type Role = Query["rbac_access_role"]
+type Actor = Query["rbac_actor_access"]
+type Invitation = Query["rbac_invitation_access"]
+
+export type GeneratedQueryChecks = [
+  Check<Equal<Query["user"]["email"], string>>,
+  Check<Equal<Query["customer"]["has_account"], boolean>>,
+  Check<Equal<Query["product"]["id"], string>>,
+  Check<Equal<Role["key"], string>>,
+  Check<Equal<Role["is_superuser"], boolean>>,
+  Check<Equal<Role["version"], number>>,
+  Check<Equal<Role["permissions"], Record<string, unknown>>>,
+  Check<Equal<Role["created_at"], Date | string>>,
+  Check<Equal<Role["deleted_at"], Date | string | null>>,
+  Check<Equal<Query["rbac_access_roles"], Role>>,
+  Check<Equal<Actor["actor_id"], string>>,
+  Check<Equal<Actor["active"], boolean>>,
+  Check<Equal<Query["rbac_role_assignment"]["role"], Role>>,
+  Check<Equal<Query["rbac_role_assignment"]["access"], Actor>>,
+  Check<Equal<Query["rbac_access_audit"]["detail"], Record<string, unknown>>>,
+  Check<Equal<Invitation["status"], "pending" | "accepted" | "cancelled">>,
+  Check<Equal<Invitation["user_id"], string | null>>,
+  Check<Equal<Query["rbac_invitation_role"]["role"], Role>>,
+  Check<Equal<Query["rbac_invitation_role"]["invitation"], Invitation>>,
+]
+`
   )
   await writeFile(
     path.join(host, "package.json"),
     JSON.stringify({
       name: "rbac-integration-host",
       private: true,
-      dependencies: { "@medusajs/medusa": "2.22.1" },
+      dependencies: { "@medusajs/medusa": "2.22.2" },
     })
   )
   await writeFile(
@@ -85,6 +130,7 @@ try {
   await db.raw("create database ??", [name])
   created = true
   await run(["db:migrate"])
+  await run(["build"])
   await run(["exec", path.join(root, "tests/integration/actors.ts")])
   await run(["exec", path.join(root, "tests/integration/invitations.ts")])
 } finally {

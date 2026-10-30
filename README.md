@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/abhi1693/medusa-rbac/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/abhi1693/medusa-rbac/actions/workflows/ci.yml)
 [![Release preparation: 0.0.1](https://img.shields.io/badge/release_preparation-0.0.1-2563eb)](https://github.com/abhi1693/medusa-rbac/releases)
-[![Medusa 2.22.1](https://img.shields.io/badge/Medusa-2.22.1-7c3aed)](https://docs.medusajs.com/)
+[![Medusa >=2.22.2](https://img.shields.io/badge/Medusa-%E2%89%A52.22.2-7c3aed)](https://docs.medusajs.com/)
 [![Node.js >=22.22.0](https://img.shields.io/badge/Node.js-%E2%89%A522.22.0-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![MIT license](https://img.shields.io/github/license/abhi1693/medusa-rbac)](LICENSE)
 [![Sponsor](https://img.shields.io/badge/Sponsor-abhi1693-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/abhi1693)
@@ -11,7 +11,7 @@ Configurable access control for Medusa v2, with native Admin screens for roles, 
 
 **Superuser is the only built-in role.** Its definition is exported in code, and bootstrap creates and explicitly assigns it to a chosen native Medusa user. Applications can declare additional roles through configuration or create them in Admin/API. Configured roles never assign access automatically.
 
-Tested against Medusa **2.22.1**, without enabling native Enterprise RBAC. Requires Node.js **22.22.0 or newer**.
+Requires Medusa **2.22.2 or newer** and Node.js **22.22.0 or newer**. Validation and the native route/field snapshots target Medusa **2.22.2**, without enabling native Enterprise RBAC.
 
 [Install](#install) · [Admin showcase](#admin-showcase) · [Configuration](#configuration-and-extension-points) · [Storefront actors](#admin-and-storefront-actors) · [Server guarantees](#server-guarantees-and-boundaries)
 
@@ -43,6 +43,8 @@ npm install 'git+https://github.com/abhi1693/medusa-rbac.git#<commit>'
 ```
 
 The Git dependency runs `prepare` to build server and Admin extensions. The release archive already contains those build outputs. Both methods install the package as `@abhi1693/medusa-rbac`.
+
+For Medusa 2.22.2, review the [dependency compatibility configuration](https://github.com/abhi1693/medusa-rbac/blob/master/docs/dependency-compatibility.md). npm applies dependency overrides from your application's root `package.json`; installing this plugin does not apply the repository's overrides to your application.
 
 If npm reports that this dependency's `prepare` script was skipped, review the pinned commit and its build script, then approve that dependency's install scripts:
 
@@ -254,7 +256,7 @@ User and invitation deletion require an active native-user Superuser. Invitation
 
 Public middleware delegates native user deletion and managed invitation deletion/acceptance to these endpoints using HTTP 307. The redirect preserves the method and body, and each destination independently authenticates and validates the operation. Native Medusa handlers remain unchanged. Updates to another user's profile and password-reset token generation use native endpoints with Superuser authorization. Users retain restricted editing of their own profile.
 
-The Medusa 2.22.1 SDK follows these redirects using its normal session or bearer authentication. Redirect destinations are fixed paths on the same backend origin. Expose backend APIs at the origin root; the Admin UI may use its configured base path. API clients that disable redirect following should call the canonical endpoints directly. A redirect response itself performs no account mutation.
+The Medusa 2.22.2 SDK follows these redirects using its normal session or bearer authentication. Redirect destinations are fixed paths on the same backend origin. Expose backend APIs at the origin root; the Admin UI may use its configured base path. API clients that disable redirect following should call the canonical endpoints directly. A redirect response itself performs no account mutation.
 
 ## Permission diagnostics
 

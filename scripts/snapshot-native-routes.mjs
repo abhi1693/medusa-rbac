@@ -4,7 +4,7 @@ import path from "node:path"
 
 const require = createRequire(import.meta.url)
 const medusa = require("@medusajs/medusa/package.json")
-if (medusa.version !== "2.22.1") {
+if (medusa.version !== "2.22.2") {
   throw new Error(
     "Review RBAC route and field policies before accepting another Medusa version"
   )
