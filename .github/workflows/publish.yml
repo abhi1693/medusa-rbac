@@ -1,0 +1,96 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published release tag. Run this workflow from that same tag.
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    uses: ./.github/workflows/ci.yml
+  publish:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      attestations: read
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Checkout released commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Verify release source
+        id: source
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict"
+          import fs from "node:fs"
+          import { execFileSync } from "node:child_process"
+          const tag = process.env.RELEASE_TAG
+          assert.match(tag, /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/)
+          assert.equal(process.env.GITHUB_REF, `refs/tags/${tag}`, "Run recovery from the release tag")
+          const source = execFileSync("git", ["rev-parse", `${tag}^{commit}`], { encoding: "utf8" }).trim()
+          assert.equal(source, process.env.GITHUB_SHA, "Release tag differs from workflow source")
+          execFileSync("git", ["merge-base", "--is-ancestor", source, "origin/master"])
+          const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"))
+          assert.equal(pkg.name, "@abhi1693/medusa-rbac")
+          assert.equal(tag, `v${pkg.version}`)
+          const release = JSON.parse(execFileSync("gh", ["release", "view", tag, "--json", "isDraft,isPrerelease,tagName,targetCommitish,assets"], { encoding: "utf8" }))
+          assert.equal(release.isDraft, false, "Only published releases can reach npm")
+          assert.equal(release.isPrerelease, false, "Prepare a stable release version")
+          assert.equal(release.tagName, tag)
+          assert.equal(release.targetCommitish, source, "Release target differs from validated source")
+          const archive = `abhi1693-medusa-rbac-${pkg.version}.tgz`
+          for (const name of [archive, "SHA256SUMS", "provenance.json"])
+            assert.equal(release.assets.filter(asset => asset.name === name && asset.state === "uploaded").length, 1, `Missing prepared asset: ${name}`)
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `archive=${archive}\n`)
+          NODE
+      - name: Download prepared release
+        env:
+          ARCHIVE: ${{ steps.source.outputs.archive }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/rbac-npm"
+          gh release download "$RELEASE_TAG" --pattern "$ARCHIVE" --pattern SHA256SUMS \
+            --pattern provenance.json --dir "$RUNNER_TEMP/rbac-npm"
+      - name: Verify exact build provenance
+        env:
+          ARCHIVE: ${{ steps.source.outputs.archive }}
+        run: |
+          gh attestation verify "$RUNNER_TEMP/rbac-npm/$ARCHIVE" \
+            --repo "$GH_REPO" --bundle "$RUNNER_TEMP/rbac-npm/provenance.json" \
+            --signer-workflow "$GH_REPO/.github/workflows/release.yml" \
+            --source-digest "$GITHUB_SHA" --signer-digest "$GITHUB_SHA" \
+            --deny-self-hosted-runners
+      - name: Publish verified archive and confirm registry contents
+        env:
+          ARCHIVE: ${{ steps.source.outputs.archive }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: node scripts/publish-npm.mjs "$RUNNER_TEMP/rbac-npm/$ARCHIVE"
