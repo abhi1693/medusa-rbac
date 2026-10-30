@@ -1,7 +1,7 @@
 {
   "name": "@abhi1693/medusa-rbac",
-  "version": "0.1.0",
-  "description": "Configurable access control, roles and administration for Medusa v2",
+  "version": "0.0.1",
+  "description": "Configurable RBAC for Medusa v2 with native Admin screens, contextual permissions, invitations, auditing and multi-actor APIs",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -13,7 +13,8 @@
   "files": [
     ".medusa/server",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "docs/assets"
   ],
   "exports": {
     "./package.json": "./package.json",
@@ -60,7 +61,10 @@
     "format": "prettier --write src tests scripts *.json *.mts",
     "format:check": "prettier --check src tests scripts *.json *.mts",
     "access:snapshot": "node scripts/snapshot-native-routes.mjs",
-    "test:integration": "node scripts/test-integration.mjs"
+    "test:integration": "node scripts/test-integration.mjs",
+    "ci:test": "npm test && npm run test:integration",
+    "ci:build": "npm run build && node scripts/package-release.mjs --check-only",
+    "release:package": "npm run build && node scripts/package-release.mjs"
   },
   "peerDependencies": {
     "@medusajs/dashboard": "^2.22.1",
@@ -105,5 +109,27 @@
     "@medusajs/ui": "4.2.8",
     "@tanstack/react-query": "5.64.2",
     "esbuild": "0.28.2"
+  },
+  "homepage": "https://github.com/abhi1693/medusa-rbac#readme",
+  "bugs": {
+    "url": "https://github.com/abhi1693/medusa-rbac/issues"
+  },
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/abhi1693"
+  },
+  "keywords": [
+    "medusa",
+    "medusa-v2",
+    "medusa-plugin",
+    "rbac",
+    "access-control",
+    "authorization",
+    "permissions",
+    "ecommerce",
+    "typescript"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }

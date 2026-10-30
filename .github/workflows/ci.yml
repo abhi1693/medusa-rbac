@@ -1,32 +1,36 @@
 name: CI
-on: [push, pull_request]
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_call:
+
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   validate:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: rbac
-          POSTGRES_PASSWORD: rbac_ci_only
-          POSTGRES_DB: postgres
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U rbac -d postgres"
-          --health-interval 5s --health-timeout 3s --health-retries 20
-    env:
-      RBAC_TEST_DATABASE_URL: postgres://rbac:rbac_ci_only@127.0.0.1:5432/postgres?sslmode=disable
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: "24"
-          cache: npm
-      - run: npm ci --no-audit --no-fund
-      - run: npm run typecheck
-      - run: npm run format:check
-      - run: npm test
-      - run: npm run test:integration
-      - run: npm pack --ignore-scripts --dry-run
+    uses: abhi1693/actions/.github/workflows/node-ci.yml@v1
+    with:
+      node-version: "24"
+      checks: '["lint", "typecheck", "test", "build"]'
+      scripts: '{"lint":"format:check","typecheck":"typecheck","test":"ci:test","build":"ci:build"}'
+      postgres-image: postgres:17-alpine
+      postgres-database: postgres
+      database-env-name: RBAC_TEST_DATABASE_URL
+      database-url-scheme: postgres
+      project-env: '{"MEDUSA_DISABLE_TELEMETRY":"true"}'
+      test-results-path: coverage/
+      test-results-name: rbac-coverage
+      timeout-minutes: 30
+  security:
+    uses: abhi1693/actions/.github/workflows/security.yml@v1
+    with:
+      npm-audit: true
+      npm-include-dev: true
+      npm-severity: high

@@ -1,20 +1,48 @@
 # Medusa RBAC
 
-Reusable access control for Medusa v2. Register permissions for your modules, define roles in application code or Admin, and enforce access on the server. The plugin includes role and staff management, invitations, contextual permission rules, permission diagnostics, live revocation and transactional access auditing.
+[![CI](https://github.com/abhi1693/medusa-rbac/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/abhi1693/medusa-rbac/actions/workflows/ci.yml)
+[![Release preparation: 0.0.1](https://img.shields.io/badge/release_preparation-0.0.1-2563eb)](https://github.com/abhi1693/medusa-rbac/releases)
+[![Medusa 2.22.1](https://img.shields.io/badge/Medusa-2.22.1-7c3aed)](https://docs.medusajs.com/)
+[![Node.js >=22.22.0](https://img.shields.io/badge/Node.js-%E2%89%A522.22.0-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![MIT license](https://img.shields.io/github/license/abhi1693/medusa-rbac)](LICENSE)
+[![Sponsor](https://img.shields.io/badge/Sponsor-abhi1693-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/abhi1693)
+
+Configurable access control for Medusa v2, with native Admin screens for roles, staff access, invitations and permission diagnostics. Define roles in application code or Admin, register permissions for your modules, and enforce access on the server for admin users, customers and custom actors.
 
 **Superuser is the only built-in role.** Its definition is exported in code, and bootstrap creates and explicitly assigns it to a chosen native Medusa user. Applications can declare additional roles through configuration or create them in Admin/API. Configured roles never assign access automatically.
 
-Targets Medusa **2.22.1**, without enabling native Enterprise RBAC.
+Tested against Medusa **2.22.1**, without enabling native Enterprise RBAC. Requires Node.js **22.22.0 or newer**.
+
+[Install](#install) · [Admin showcase](#admin-showcase) · [Configuration](#configuration-and-extension-points) · [Storefront actors](#admin-and-storefront-actors) · [Server guarantees](#server-guarantees-and-boundaries)
+
+![Native Admin role overview with management sources, permission counts and account assignments](docs/assets/role-overview.png)
+
+## Capabilities
+
+| Capability | What it provides |
+| --- | --- |
+| [Role management](#roles-and-scoped-access) | Multiple roles per account, code-managed definitions, editable Admin roles, duplication and live revocation. |
+| [Permission editing](#permission-editing) | Searchable permission groups, group selection and typed contextual allow/deny rules. |
+| [Access diagnostics](#check-access-before-changing-assignments) | Searchable accounts by type, context-based previews and readable decision explanations. |
+| [Staff invitations](#role-bound-invitations) | Selected roles activate before first login; pending invitations can be renewed or revoked. |
+| [Access activity](#access-activity) | Versioned access changes, before/after audit records and compensatable account workflows. |
+| [Application extensions](#server-checks) | Public middleware, service checks, custom route policies and separate user/customer/custom-actor identities. |
 
 ## Install
 
-Until an npm release is published, install from this repository, pinned to a reviewed commit:
+Published GitHub releases include a prebuilt npm package with server, Admin and storefront-client exports. Once **v0.0.1** is published, install its archive:
+
+```sh
+npm install 'https://github.com/abhi1693/medusa-rbac/releases/download/v0.0.1/abhi1693-medusa-rbac-0.0.1.tgz'
+```
+
+Draft release assets are not public. While v0.0.1 is being prepared, or when selecting a source revision, install from Git pinned to a reviewed commit:
 
 ```sh
 npm install 'git+https://github.com/abhi1693/medusa-rbac.git#<commit>'
 ```
 
-The Git dependency runs `prepare` to build server and Admin extensions. Node 22.22 or newer is required.
+The Git dependency runs `prepare` to build server and Admin extensions. The release archive already contains those build outputs. Both methods install the package as `@abhi1693/medusa-rbac`.
 
 If npm reports that this dependency's `prepare` script was skipped, review the pinned commit and its build script, then approve that dependency's install scripts:
 
@@ -245,15 +273,61 @@ const decision = explainPermission(principal, "documents.read", trustedContext)
 
 Provide an established principal, a registered permission and trusted context. Use the service's `allows` method or middleware for enforcement. `POST /admin/access/evaluate` exposes the Admin preview and requires an active native-user Superuser.
 
-## Admin previews
+## Admin showcase
 
-Role details show grants, contextual rules and assigned accounts.
+The plugin uses Medusa UI components and supported Admin routes and widget zones. These screens work with the application's configured Medusa backend and authentication.
+
+### Roles and scoped access
+
+Open a role's detail page to inspect its grants, contextual rules, management source, assigned accounts and pending invitations. Stable links make the same role easy to revisit and share within the Admin.
 
 ![Role details with contextual permission rules and assigned accounts](docs/assets/role-details.png)
 
-The permission checker searches accounts within the selected type.
+### Permission editing
+
+Search permissions, select a group or focus on the selected set. Typed rule controls support contextual conditions and explicit allow/deny priorities.
+
+![Native role editor with grouped permissions and contextual rule controls](docs/assets/permission-editor.png)
+
+<details>
+<summary>Explore the contextual rule editor</summary>
+
+Set a permission, effect, priority and typed conditions to express access for a particular request context.
+
+![Contextual rule editor with permission, effect, priority and condition fields](docs/assets/rule-editor.png)
+
+</details>
+
+### Check access before changing assignments
+
+Choose an account, supply context and inspect its current permission decision. The preview uses the enforcement engine and leaves assignments unchanged.
+
+![Permission preview showing the selected account, context and decision explanation](docs/assets/permission-check.png)
+
+Account search stays within the selected account type. Native users and customers use their owning Medusa modules; custom actor providers can supply their own search adapter.
 
 ![Customer account search in the permission checker](docs/assets/account-search.png)
+
+### Role-bound invitations
+
+Select roles when inviting a staff member and activate them as part of account acceptance. Review pending access, renew a link or revoke an invitation from the same screen.
+
+![Invitation management showing pending staff invitations and their selected roles](docs/assets/invitations.png)
+
+<details>
+<summary>Assign roles to an existing staff account</summary>
+
+Review staff accounts and their combined roles in the Users view. Open a user to manage assignments through the native user-detail Roles widget.
+
+![Staff access management showing account names and multiple assigned roles](docs/assets/user-assignments.png)
+
+</details>
+
+### Access activity
+
+Review who changed access, the affected role or account, and when it happened. Configuration synchronization and administrative changes use the same access audit history.
+
+![Access activity showing readable actors, targets and administrative changes](docs/assets/activity.png)
 
 ## Storefront client
 
@@ -281,8 +355,10 @@ npm pack --ignore-scripts --dry-run
 
 The tests cover native route inventories, middleware denial, configurable permission/role registries, role synchronization and removal, typed actor isolation, rule precedence/context and explanations, concurrency guards, workflow compensation and Admin components. Run `RBAC_TEST_DATABASE_URL=<local-postgres-url> npm run test:integration` for isolated PostgreSQL actor and invitation rollback/retry checks. Browser lifecycle checks also run in the consuming application’s isolated test harness. `npm run access:snapshot` refreshes the native inventory for a reviewed framework upgrade; generating a snapshot never authorizes new routes.
 
+Release preparation and package verification are documented in [Preparing a release](docs/releasing.md).
+
 Framework references: [plugins](https://docs.medusajs.com/learn/fundamentals/plugins/create), [module options](https://docs.medusajs.com/learn/fundamentals/modules/options), [API middlewares](https://docs.medusajs.com/learn/fundamentals/api-routes/middlewares), [Admin widgets](https://docs.medusajs.com/learn/fundamentals/admin/widgets).
 
 ## License
 
-MIT
+[MIT](LICENSE)
