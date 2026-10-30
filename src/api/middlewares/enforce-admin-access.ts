@@ -39,10 +39,6 @@ export async function enforceAdminAccess(
       .retrieveUser(auth.actor_id, { select: ["id"] })
     const access = req.scope.resolve<AccessControlService>(ACCESS_CONTROL)
     const descriptor = await access.resolveRequest(req)
-    if (descriptor?.self) {
-      req.query.fields = descriptor.action.forceFields!.join(",")
-      return next()
-    }
     const principal = await access.principal(auth.actor_id)
     const context = await access.permissionContext(req)
     const allowed = (permission: string) =>

@@ -127,6 +127,14 @@ export async function verifyLayouts(base, fixture) {
     (await request("first", zone)).default_configuration.configuration,
     configuration(3)
   )
+  const updatedProfile = await request(
+    "inactive",
+    `/admin/users/${fixture.inactive.id}`,
+    "POST",
+    { first_name: "Pending staff" }
+  )
+  assert.equal(updatedProfile.user.id, fixture.inactive.id)
+  assert.equal(updatedProfile.user.first_name, "Pending staff")
   for (const method of ["GET", "POST", "DELETE"])
     await request(
       "inactive",

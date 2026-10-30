@@ -16,10 +16,44 @@ import * as person from "../../src/api/admin/access/staff/[id]/route"
 import * as audit from "../../src/api/admin/access/audit/route"
 import * as permissions from "../../src/api/admin/access/permissions/route"
 import middlewares from "../../src/api/middlewares"
-import { crudProfile, defineResource } from "../../src/resources"
+import {
+  crudProfile,
+  defineResource,
+  type ProfileAction,
+} from "../../src/resources"
 
 import { createPrincipal } from "../fixtures/access"
 const principal = createPrincipal({ actor_id: "u" })
+const selfProfileResource = (
+  actorTypes = ["user"],
+  payload?: ProfileAction["payload"]
+) =>
+  defineResource({
+    key: "profiles",
+    root: "profiles",
+    actorTypes,
+    profile: {
+      item: {
+        parameter: "id",
+        profile: {
+          actions: {
+            POST: {
+              operation: "update",
+              payload,
+              self: {
+                parameter: "id",
+                fields: ["first_name"],
+                responseFields: ["id", "first_name"],
+              },
+            },
+          },
+        },
+      },
+    },
+    operations: {
+      update: { permissions: ["products.edit"], access: "authenticated" },
+    },
+  })
 function harness(path = "/admin/products", method = "GET", body: unknown = {}) {
   const access = {
     configuration: createAccessConfig(),
@@ -117,46 +151,26 @@ it("passes native user errors to Medusa and refuses deleted identities", async (
 })
 it("allows only own safe profile fields without role assignments", async () => {
   const h = harness("/admin/users/u", "POST", { first_name: "Name" })
+  h.access.principal.mockResolvedValue({
+    ...principal,
+    active: false,
+    is_superuser: false,
+    permissions: [],
+  })
   await h.run()
   expect(h.next).toHaveBeenCalledWith()
   expect(h.req.query.fields).toBe("id,email,first_name,last_name,avatar_url")
-  expect(h.access.principal).not.toHaveBeenCalled()
+  expect(h.access.principal).toHaveBeenCalledWith("u")
 })
 it("uses a computed self match rather than trusting a declared self rule", async () => {
   const configuration = createAccessConfig({
-    resources: [
-      defineResource({
-        key: "profiles",
-        root: "profiles",
-        actorTypes: ["user"],
-        profile: {
-          item: {
-            parameter: "id",
-            profile: {
-              actions: {
-                POST: {
-                  operation: "update",
-                  self: {
-                    parameter: "id",
-                    fields: ["first_name"],
-                    responseFields: ["id", "first_name"],
-                  },
-                },
-              },
-            },
-          },
-        },
-        operations: {
-          update: { permissions: ["products.edit"], access: "authenticated" },
-        },
-      }),
-    ],
+    resources: [selfProfileResource()],
   })
   const own = harness("/admin/profiles/u", "POST", { first_name: "Name" })
   own.access.resolveRequest = configuration.resolveRequest
   await own.run()
   expect(own.next).toHaveBeenCalledWith()
-  expect(own.access.principal).not.toHaveBeenCalled()
+  expect(own.access.principal).toHaveBeenCalledWith("u")
   expect(own.req.query.fields).toBe("id,first_name")
   for (const [id, body] of [
     ["Other", { first_name: "Name" }],
@@ -174,6 +188,51 @@ it("uses a computed self match rather than trusting a declared self rule", async
     expect(denied.res.status).toHaveBeenCalledWith(403)
     expect(denied.next).not.toHaveBeenCalled()
     expect(denied.req.query.fields).toBeUndefined()
+  }
+})
+it.each(["customer", "vendor"])(
+  "does not turn an own-ID match into authority for a %s-only resource",
+  async (actorType) => {
+    const configuration = createAccessConfig({
+      resources: [selfProfileResource([actorType])],
+    })
+    const h = harness("/admin/profiles/u", "POST", { first_name: "Name" })
+    h.access.resolveRequest = configuration.resolveRequest
+    expect((await configuration.resolveRequest(h.req))?.self).toBe(true)
+    await h.run()
+    expect(h.res.status).toHaveBeenCalledWith(403)
+    expect(h.next).not.toHaveBeenCalled()
+    expect(h.req.query.fields).toBeUndefined()
+  }
+)
+it("enforces resolved payload requirements before applying a self-profile projection", async () => {
+  const configuration = createAccessConfig({
+    resources: [selfProfileResource(["user"], async () => ["prices.edit"])],
+  })
+  for (const [active, permissions, allowed] of [
+    [true, [], false],
+    [false, ["prices.edit"], false],
+    [true, ["prices.edit"], true],
+  ] as const) {
+    const h = harness("/admin/profiles/u", "POST", { first_name: "Name" })
+    h.access.resolveRequest = configuration.resolveRequest
+    h.access.principal.mockResolvedValue({
+      ...principal,
+      active,
+      is_superuser: false,
+      permissions: [...permissions],
+    })
+    await h.run()
+    expect(h.access.principal).toHaveBeenCalledWith("u")
+    if (allowed) {
+      expect(h.next).toHaveBeenCalledWith()
+      expect(h.req.query.fields).toBe("id,first_name")
+      expect(h.res.status).not.toHaveBeenCalled()
+    } else {
+      expect(h.res.status).toHaveBeenCalledWith(403)
+      expect(h.next).not.toHaveBeenCalled()
+      expect(h.req.query.fields).toBeUndefined()
+    }
   }
 })
 it("enforces registered fields, capabilities and unknown-command denial for another resource", async () => {

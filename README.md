@@ -68,6 +68,7 @@ import { defineConfig } from "@medusajs/framework/utils"
 import type { AccessControlOptions } from "@abhi1693/medusa-rbac/config"
 import { definePermission } from "@abhi1693/medusa-rbac/define-permission"
 import { defineRole } from "@abhi1693/medusa-rbac/roles"
+import { defineResource } from "@abhi1693/medusa-rbac/resources"
 
 const documentsRead = definePermission({
   id: "documents.read",
@@ -85,12 +86,20 @@ const access: AccessControlOptions = {
       permissions: [documentsRead[0]],
     }),
   ],
-  routes: [
-    {
-      method: "GET",
-      path: "/admin/documents/:id",
-      permissions: ["documents.read"],
-    },
+  resources: [
+    defineResource({
+      key: "documents",
+      root: "documents",
+      actorTypes: ["user"],
+      profile: {
+        actions: { GET: "read" },
+        item: {
+          parameter: "id",
+          profile: { actions: { GET: "read" } },
+        },
+      },
+      operations: { read: { permissions: [documentsRead[0]] } },
+    }),
   ],
 }
 
