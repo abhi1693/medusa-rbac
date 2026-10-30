@@ -11,6 +11,8 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { randomBytes } from "node:crypto"
 import { createRequire } from "node:module"
+import { createServer } from "node:net"
+import { verifyLayouts } from "../tests/integration/layouts-http.mjs"
 
 const require = createRequire(import.meta.url)
 const { ModulesSdkUtils } = require("@medusajs/framework/utils")
@@ -42,9 +44,21 @@ const env = {
   DATABASE_URL: target.href,
   JWT_SECRET: randomBytes(32).toString("hex"),
   COOKIE_SECRET: randomBytes(32).toString("hex"),
+  RBAC_LAYOUT_FIXTURE_PATH: path.join(host, "layout-fixture.json"),
 }
 delete env.REDIS_URL
 let created = false
+let server
+let serverError
+const stopServer = async () => {
+  if (!server?.pid || server.exitCode !== null || server.signalCode !== null)
+    return
+  const exited = new Promise((resolve) => server.once("exit", resolve))
+  server.kill("SIGTERM")
+  const timeout = setTimeout(() => server.kill("SIGKILL"), 10000)
+  await exited
+  clearTimeout(timeout)
+}
 const run = (args) =>
   new Promise((resolve, reject) => {
     const child = spawn(
@@ -133,7 +147,47 @@ export type GeneratedQueryChecks = [
   await run(["build"])
   await run(["exec", path.join(root, "tests/integration/actors.ts")])
   await run(["exec", path.join(root, "tests/integration/invitations.ts")])
+  await run(["exec", path.join(root, "tests/integration/layouts.ts")])
+  const port = await new Promise((resolve, reject) => {
+    const probe = createServer()
+    probe.once("error", reject)
+    probe.listen(0, "127.0.0.1", () => {
+      const port = probe.address().port
+      probe.close((error) => (error ? reject(error) : resolve(port)))
+    })
+  })
+  server = spawn(
+    process.execPath,
+    [
+      path.join(root, "node_modules/@medusajs/cli/cli.js"),
+      "start",
+      "--port",
+      String(port),
+    ],
+    { cwd: host, env, stdio: "inherit" }
+  )
+  server.once("error", (error) => {
+    serverError = error
+  })
+  const base = `http://127.0.0.1:${port}`
+  const deadline = Date.now() + 45000
+  while (true) {
+    if (serverError) throw serverError
+    if (server.exitCode !== null)
+      throw new Error(`Medusa HTTP server exited ${server.exitCode}`)
+    try {
+      if ((await fetch(`${base}/health`)).ok) break
+    } catch {}
+    if (Date.now() >= deadline)
+      throw new Error("Medusa HTTP server did not become ready")
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  await verifyLayouts(
+    base,
+    JSON.parse(await readFile(env.RBAC_LAYOUT_FIXTURE_PATH, "utf8"))
+  )
 } finally {
+  await stopServer()
   if (created) await db.raw("drop database ?? with (force)", [name])
   await db.destroy()
   await rm(host, { recursive: true, force: true })

@@ -12,6 +12,7 @@ import {
   additionalWritePermissions,
   isBootstrapRead,
   isSelfProfileUpdate,
+  layoutWritePermissions,
   normalizedPath,
   validateFieldSelection,
 } from "../../lib/access/policy"
@@ -86,6 +87,13 @@ export async function enforceAdminAccess(
       return res
         .status(403)
         .json({ message: "You do not have permission for this operation" })
+    if (resource === "layouts" && req.method === "POST") {
+      const permissions = layoutWritePermissions(req.body)
+      if (permissions === null || !permissions.every(allowed))
+        return res.status(403).json({
+          message: "Shared layout changes require settings management access",
+        })
+    }
     if (
       ["GET", "HEAD"].includes(req.method) &&
       !validateFieldSelection(fieldResource, req.query.fields)

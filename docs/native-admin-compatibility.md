@@ -1,4 +1,4 @@
-# Native Admin field selections
+# Native Admin compatibility
 
 Reviewed on 2026-10-30 against Medusa and Dashboard 2.22.2.
 
@@ -9,3 +9,13 @@ The page also loads its Variant table through `GET /admin/products/:id/variants`
 Medusa supports field selection and relation expansion through the `fields` query parameter. See the official [allowed-fields guide](https://docs.medusajs.com/learn/fundamentals/api-routes/allowed-fields) and [Admin API reference](https://docs.medusajs.com/api/admin). Native exclusions such as `-variants` remain valid. The plugin bounds requested paths independently of role grants: Superuser does not bypass this field boundary, and adding the shipping profile does not permit its nested relations, unknown paths or an unrestricted `*` selection.
 
 Regression checks inspect the matching published Dashboard Product/Variant constants, Product breadcrumb exclusions and Variant table request. Middleware checks cover Superuser and authorized ordinary accounts; negative cases retain route and inventory permissions and reject unreviewed subrelations, unknown fields, unrestricted wildcards and Variant-only fields on top-level Product reads.
+
+## Personal and shared layouts
+
+Reviewed on 2026-10-31 against Medusa 2.22.2. Native layout configuration is available since 2.17.2; see the official [layout guide](https://docs.medusajs.com/resources/commerce-modules/settings/layout-configurations) and [Admin layout guide](https://docs.medusajs.com/user-guide/tips/layout-configurations).
+
+The handlers at `api/admin/layouts/[zone]/configuration/route.ts` take personal layout ownership from `req.auth_context.actor_id`. GET returns that user's personal configuration and the shared default. DELETE clears only that user's personal layout. POST selects the shared default only through `is_default`; its public `setLayoutConfigurationWorkflow` delegates to either `setSystemDefaultLayoutConfiguration` or the actor's `setLayoutConfiguration`. The list handler at `layouts/configurations/route.ts` adds an actor-or-system-default filter independently of supplied query filters.
+
+RBAC permits the two reviewed native layout routes for active staff: GET `/admin/layouts/configurations` and GET/POST/DELETE `/admin/layouts/:zone/configuration`. Personal preferences require no commerce-setting grant. A shared POST requires `settings.manage`, including its contextual rules. The native handler reads the raw body rather than the transformed body, so the RBAC scope check accepts only an absent or boolean `is_default`; strings, numbers, arrays, objects and null cannot turn a personal save into a shared write. Unknown layout paths and methods remain denied. Field selection accepts only the seven native Layout DTO fields and no user relations.
+
+Permanent integration checks start the native HTTP server against a disposable database and authenticate separate staff identities. They verify personal ownership despite forged actor inputs, actor-scoped listing, restricted shared saves, authorized shared saves, personal deletion preserving other users and the shared default, inactive access, malformed scopes and unknown-route denial. The plugin does not modify native handlers or stored layout records directly.

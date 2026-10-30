@@ -232,6 +232,7 @@ The role editor groups permissions by area, supports search, group selection and
 
 - Every Admin operation requires a native user identity. Customer and secret API-key principals cannot inherit staff access.
 - Native commerce operations use a reviewed Medusa route/field inventory. Unknown methods/routes, arbitrary workflow execution, API-key management and native RBAC endpoints deny, including for Superuser. Extension policies cannot reopen native or access-management routes.
+- Active staff can manage their personal native Admin layouts. Shared layout changes require `settings.manage`; native actor ownership and bounded field selection remain enforced.
 - Role, invitation and staff administration require an active Superuser. Ordinary roles cannot delegate this authority. The system role and its name are protected, self-deletion is rejected, and transactional locking preserves at least one active Superuser.
 - Role/staff writes require record versions. Assignments, access mutations and before/after audit events commit atomically. Access is read on every request; Admin refreshes its access state while visible.
 - Managed invitations compose native workflows and activate assigned roles before first login. Pending invitations reserve their roles. Account deletion and invitation failures use compensation.

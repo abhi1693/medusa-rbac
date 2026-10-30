@@ -201,6 +201,17 @@ export function policyFor(method: string, path: string): Policy | null {
     )
   )
     return null
+  if (/^\/admin\/layouts(?:\/|$)/.test(path)) {
+    // Native handlers bind personal records to auth_context.actor_id. Shared
+    // writes are checked separately against the untransformed request body.
+    if (
+      (verb === "GET" && path === "/admin/layouts/configurations") ||
+      (["GET", "POST", "DELETE"].includes(verb) &&
+        /^\/admin\/layouts\/[^/]+\/configuration$/.test(path))
+    )
+      return read()
+    return null
+  }
   const route = patterns.find(
     (r) => r.pattern.test(path) && r.methods.includes(verb)
   )
@@ -245,6 +256,15 @@ export function policyFor(method: string, path: string): Policy | null {
 
 export function isBootstrapRead(method: string, path: string) {
   return ["GET", "HEAD"].includes(method) && bootstrapReads.has(path)
+}
+
+export function layoutWritePermissions(body: unknown): Permission[] | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null
+  const isDefault = (body as Record<string, unknown>).is_default
+  // The native route reads req.body rather than req.validatedBody. Never let
+  // a truthy string, number or object select a shared layout as a personal save.
+  if (isDefault !== undefined && typeof isDefault !== "boolean") return null
+  return isDefault === true ? ["settings.manage"] : []
 }
 
 export function isSelfProfileUpdate(
@@ -319,6 +339,16 @@ export function validateFieldSelection(
       "product.metadata",
     ],
     users: ["id", "email", "first_name", "last_name", "avatar_url"],
+    // Layout list query configuration lives below configurations/query-config.
+    layouts: [
+      "id",
+      "zone",
+      "user_id",
+      "is_system_default",
+      "configuration",
+      "created_at",
+      "updated_at",
+    ],
   }
   const allowed = new Set([...safe, ...(extra[resource] || [])])
   return fields.split(",").every((value) => {

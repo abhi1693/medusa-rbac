@@ -7,6 +7,7 @@ import {
   additionalWritePermissions,
   can,
   isSelfProfileUpdate,
+  layoutWritePermissions,
   normalizedPath,
   policyFor,
   validateFieldSelection,
@@ -120,6 +121,67 @@ test("native user management requires an active Superuser", () => {
     ["POST", "/admin/users/user_other/unreviewed"],
   ])
     assert.equal(policyFor(method, path), null, `${method} ${path}`)
+})
+
+test("layout policy matches pinned native scopes and bounded list fields", () => {
+  const { AdminSetLayoutConfiguration } = nativeRequire(
+    "@medusajs/medusa/api/admin/layouts/[zone]/configuration/validators"
+  )
+  const { defaultLayoutConfigurationFields } = nativeRequire(
+    "@medusajs/medusa/api/admin/layouts/configurations/query-config"
+  )
+  const personal = { configuration: { widgets: {} } }
+  assert.equal(AdminSetLayoutConfiguration.parse(personal).is_default, false)
+  for (const is_default of [false, true]) {
+    const body = { ...personal, is_default }
+    assert.equal(AdminSetLayoutConfiguration.parse(body).is_default, is_default)
+    assert.deepEqual(
+      layoutWritePermissions(body),
+      is_default ? ["settings.manage"] : []
+    )
+  }
+  assert.deepEqual(layoutWritePermissions(personal), [])
+  for (const is_default of ["false", "true", 0, 1, null, [], {}]) {
+    const body = { ...personal, is_default }
+    assert.throws(() => AdminSetLayoutConfiguration.parse(body))
+    assert.equal(layoutWritePermissions(body), null)
+  }
+  assert.equal(
+    validateFieldSelection(
+      "layouts",
+      defaultLayoutConfigurationFields.join(",")
+    ),
+    true
+  )
+  for (const fields of [
+    "*",
+    "user.email",
+    "*user",
+    "configuration.secret",
+    "-unreviewed",
+  ])
+    assert.equal(validateFieldSelection("layouts", fields), false)
+  for (const [method, path] of [
+    ["GET", "/admin/layouts/configurations"],
+    ["GET", "/admin/layouts/product.details/configuration"],
+    ["POST", "/admin/layouts/product.details/configuration"],
+    ["DELETE", "/admin/layouts/product.details/configuration"],
+  ]) {
+    assert.equal(
+      inventory.some(
+        (route) =>
+          route.methods.includes(method) &&
+          (route.path === path ||
+            route.path === "/admin/layouts/:zone/configuration")
+      ),
+      true
+    )
+    assert.deepEqual(policyFor(method, path), { permissions: [] })
+    assert.equal(
+      can({ ...principal, active: false }, policyFor(method, path)!),
+      false
+    )
+  }
 })
 
 test("normalization cannot turn a denied request into an alternate operation", () => {

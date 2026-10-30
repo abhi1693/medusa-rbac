@@ -196,6 +196,112 @@ it("denies inactive business access and unknown operations", async () => {
   await denied.run()
   expect(denied.res.status).toHaveBeenCalledWith(403)
 })
+it("allows active staff personal layouts and gates shared saves with contextual settings access", async () => {
+  const ordinary = { ...principal, is_superuser: false, permissions: [] }
+  for (const [method, path, body] of [
+    ["GET", "/admin/layouts/configurations", {}],
+    ["HEAD", "/admin/layouts/product.details/configuration", {}],
+    ["GET", "/admin/layouts/product.details/configuration", {}],
+    ["DELETE", "/admin/layouts/product.details/configuration", {}],
+    ["POST", "/admin/layouts/product.details/configuration", {}],
+    [
+      "POST",
+      "/admin/layouts/product.details/configuration",
+      { is_default: false },
+    ],
+  ] as const) {
+    const h = harness(path, method, body)
+    h.access.principal.mockResolvedValue(ordinary)
+    await h.run()
+    expect(h.next, `${method} ${path}`).toHaveBeenCalledWith()
+  }
+  const denied = harness(
+    "/admin/layouts/product.details/configuration",
+    "POST",
+    {
+      is_default: true,
+    }
+  )
+  denied.access.principal.mockResolvedValue(ordinary)
+  await denied.run()
+  expect(denied.res.status).toHaveBeenCalledWith(403)
+  expect(denied.next).not.toHaveBeenCalled()
+  const allowed = harness(
+    "/admin/layouts/product.details/configuration",
+    "POST",
+    {
+      is_default: true,
+    }
+  )
+  allowed.access.principal.mockResolvedValue({
+    ...ordinary,
+    permissions: ["settings.manage"],
+  })
+  await allowed.run()
+  expect(allowed.next).toHaveBeenCalledWith()
+  const contextDenied = harness(
+    "/admin/layouts/product.details/configuration",
+    "POST",
+    {
+      is_default: true,
+    }
+  )
+  contextDenied.access.principal.mockResolvedValue({
+    ...ordinary,
+    permissions: ["settings.manage"],
+    rules: [{ permission: "settings.manage", effect: "deny", conditions: {} }],
+  })
+  await contextDenied.run()
+  expect(contextDenied.res.status).toHaveBeenCalledWith(403)
+})
+it("keeps layout scope validation, inactive users, unknown routes and field expansion fail closed", async () => {
+  for (const body of [
+    null,
+    [],
+    "body",
+    1,
+    ...["false", "true", 0, 1, null, [], {}].map((is_default) => ({
+      is_default,
+    })),
+  ]) {
+    const h = harness(
+      "/admin/layouts/product.details/configuration",
+      "POST",
+      body
+    )
+    await h.run()
+    expect(h.res.status, JSON.stringify(body)).toHaveBeenCalledWith(403)
+    expect(h.next).not.toHaveBeenCalled()
+  }
+  for (const [path, method] of [
+    ["/admin/layouts/product.details/configuration", "GET"],
+    ["/admin/layouts/product.details/configuration", "POST"],
+    ["/admin/layouts/product.details/configuration", "DELETE"],
+  ]) {
+    const h = harness(path, method)
+    h.access.principal.mockResolvedValue({ ...principal, active: false })
+    await h.run()
+    expect(h.res.status).toHaveBeenCalledWith(403)
+  }
+  for (const [path, method] of [
+    ["/admin/layouts", "GET"],
+    ["/admin/layouts/configurations", "POST"],
+    ["/admin/layouts/product.details/configuration", "PUT"],
+    ["/admin/layouts/product.details/configuration/shared", "POST"],
+  ]) {
+    const h = harness(path, method)
+    await h.run()
+    expect(h.res.status).toHaveBeenCalledWith(403)
+  }
+  const selected = harness("/admin/layouts/configurations")
+  selected.req.query.fields = "id,configuration,user_id"
+  await selected.run()
+  expect(selected.next).toHaveBeenCalledWith()
+  const expanded = harness("/admin/layouts/configurations")
+  expanded.req.query.fields = "*user.auth_identity"
+  await expanded.run()
+  expect(expanded.res.status).toHaveBeenCalledWith(403)
+})
 it.each(["GET", "HEAD"])("bounds read field selection (%s)", async (method) => {
   const h = harness("/admin/products", method)
   h.req.query.fields = "*"
