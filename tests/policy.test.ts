@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "vitest"
 import { createRequire } from "node:module"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
 import {
   additionalWritePermissions,
@@ -168,6 +168,51 @@ test("cross-domain fields and wildcard selections are bounded", () => {
     "+rbac_roles",
   ])
     assert.equal(validateFieldSelection("products", fields), false)
+})
+
+test("native product detail includes its reviewed shipping profile without expanding its relations", () => {
+  const dashboard = path.dirname(
+    nativeRequire.resolve("@medusajs/dashboard/package.json")
+  )
+  const directory = path.join(dashboard, "dist")
+  const file = readdirSync(directory)
+    .filter((file) => file.endsWith(".mjs"))
+    .find((file) =>
+      readFileSync(path.join(directory, file), "utf8").includes(
+        "// src/routes/products/product-detail/constants.ts"
+      )
+    )
+  assert.ok(
+    file,
+    "Inspect the pinned native product detail fields after Dashboard upgrades"
+  )
+  const source = readFileSync(path.join(directory, file), "utf8")
+  const fields = source.match(
+    /PRODUCT_DETAIL_FIELDS = getLinkedFields\(\s*"product",\s*"([^"]+)"\s*\)/
+  )?.[1]
+  assert.equal(fields, "*categories,*shipping_profile,-variants")
+  assert.equal(validateFieldSelection("products", fields), true)
+  for (const selection of [
+    "shipping_profile",
+    "-shipping_profile,-variants",
+    "+shipping_profile,-type",
+  ])
+    assert.equal(validateFieldSelection("products", selection), true, selection)
+  for (const selection of [
+    "*shipping_profile.shipping_options",
+    "shipping_profile.secret",
+    "shipping_profile.*",
+    "*shipping_profile.*",
+    "-shipping_profile.secret",
+    "*unreviewed_relation",
+    "-unreviewed_relation",
+    "*",
+  ])
+    assert.equal(
+      validateFieldSelection("products", selection),
+      false,
+      selection
+    )
 })
 
 test("nested and batch writes require their sensitive action grants", () => {

@@ -202,6 +202,49 @@ it.each(["GET", "HEAD"])("bounds read field selection (%s)", async (method) => {
   await h.run()
   expect(h.res.status).toHaveBeenCalledWith(403)
 })
+it.each(["GET", "HEAD"])(
+  "allows the native Superuser product detail selection (%s)",
+  async (method) => {
+    const h = harness("/admin/products/prod_native", method)
+    h.req.query.fields = "*categories,*shipping_profile,-variants"
+    await h.run()
+    expect(h.next).toHaveBeenCalledWith()
+    expect(h.res.status).not.toHaveBeenCalled()
+  }
+)
+it("retains product permissions and bounded relations for native product detail reads", async () => {
+  const authorized = harness("/admin/products/prod_native")
+  authorized.req.query.fields = "*categories,*shipping_profile,-variants"
+  authorized.access.principal.mockResolvedValue(
+    createPrincipal({
+      is_superuser: false,
+      permissions: ["products.view", "prices.view"],
+    })
+  )
+  await authorized.run()
+  expect(authorized.next).toHaveBeenCalledWith()
+  const denied = harness("/admin/products/prod_native")
+  denied.req.query.fields = "*categories,*shipping_profile,-variants"
+  denied.access.principal.mockResolvedValue(
+    createPrincipal({ is_superuser: false, permissions: ["products.view"] })
+  )
+  await denied.run()
+  expect(denied.res.status).toHaveBeenCalledWith(403)
+  for (const fields of [
+    "*shipping_profile.shipping_options",
+    "*unreviewed_relation",
+    "*",
+  ]) {
+    const superuser = harness("/admin/products/prod_native")
+    superuser.req.query.fields = fields
+    await superuser.run()
+    expect(superuser.res.status).toHaveBeenCalledWith(403)
+    expect(superuser.res.json).toHaveBeenCalledWith({
+      message: "This field selection is not allowed",
+    })
+    expect(superuser.next).not.toHaveBeenCalled()
+  }
+})
 it("requires inventory permission for reviewed inventory expansions", async () => {
   const h = harness()
   h.req.query.fields = "variants.inventory_quantity"

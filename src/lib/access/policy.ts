@@ -292,6 +292,8 @@ export function validateFieldSelection(
     orders: ["payment_status", "fulfillment_status"],
     products: [
       "*categories",
+      // Dashboard's native product detail also expands this linked profile.
+      "*shipping_profile",
       "variants.id",
       "variants.inventory_quantity",
       "variants.inventory_items.inventory.location_levels",
