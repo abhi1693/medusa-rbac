@@ -17,10 +17,34 @@ import {
   inviteInput,
   acceptInviteInput,
   acceptInviteQuery,
+  evaluateInput,
+  actorPageInput,
 } from "../lib/access/validators"
 
 export default defineMiddlewares({
   routes: [
+    {
+      matcher: "/admin/access/actors/:actor_type",
+      method: "GET",
+      middlewares: [
+        validateAndTransformQuery(actorPageInput, {
+          defaults: [],
+          isList: true,
+        }),
+      ],
+    },
+    {
+      matcher: "/admin/access/evaluate",
+      method: "POST",
+      middlewares: [validateAndTransformBody(evaluateInput)],
+    },
+    {
+      matcher: "/admin/access/roles/:id",
+      method: "GET",
+      middlewares: [
+        validateAndTransformQuery(pageInput, { defaults: [], isList: false }),
+      ],
+    },
     {
       matcher: "/access/actors/:actor_type/me",
       method: "GET",

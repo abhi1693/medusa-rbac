@@ -1,4 +1,6 @@
 import { z } from "@medusajs/framework/zod"
+import { isPermissionContext } from "./permission-context"
+import type { PermissionContext } from "./config"
 
 const permission = z.string().regex(/^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$/)
 export const roleInput = z
@@ -28,6 +30,10 @@ export const pageInput = z.object({
 export const staffPageInput = pageInput.extend({
   q: z.string().trim().max(100).optional(),
 })
+export const actorPageInput = staffPageInput.extend({
+  id: z.string().trim().min(1).max(100).optional(),
+})
+export type ActorPageInput = z.infer<typeof actorPageInput>
 export type StaffPageInput = z.infer<typeof staffPageInput>
 export type PageInput = z.infer<typeof pageInput>
 export const inviteInput = z
@@ -44,3 +50,12 @@ export const acceptInviteInput = z
   })
   .strict()
 export const acceptInviteQuery = z.object({ token: z.string().min(1) }).strict()
+
+export const evaluateInput = z
+  .object({
+    actor_type: z.string().min(1).max(100),
+    actor_id: z.string().min(1).max(100),
+    permission,
+    context: z.custom<PermissionContext>(isPermissionContext).default({}),
+  })
+  .strict()

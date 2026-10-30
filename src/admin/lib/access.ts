@@ -2,6 +2,8 @@ import Medusa from "@medusajs/js-sdk"
 import { useEffect, useRef } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { AccessPrincipal, Permission } from "../../lib/access/permissions"
+import type { PermissionContext } from "../../lib/access/config"
+import type { PermissionDecision } from "../../lib/access/explain"
 
 declare const __BACKEND_URL__: string | undefined
 declare const __AUTH_TYPE__: "session" | "jwt" | undefined
@@ -28,6 +30,11 @@ export type Role = {
   rules?: import("../../lib/access/config").PermissionRule[]
   is_superuser: boolean
   version: number
+  source?: "system" | "configuration" | "admin"
+  configuration_status?: "active" | "removed"
+  actor_count?: number
+  pending_invitation_count?: number
+  created_at?: string
 }
 export type Staff = {
   id: string
@@ -77,6 +84,38 @@ export const accessApi = {
       roles?: Pick<Role, "id" | "name">[]
     }>(`${root}/me`),
   roles: () => sdk.client.fetch<{ roles: Role[] }>(`${root}/roles`),
+  role: (id: string, offset = 0) =>
+    sdk.client.fetch<{
+      role: Role
+      actors: {
+        actor_type: string
+        actor_id: string
+        active: boolean
+        label?: string
+      }[]
+      actor_count: number
+      pending_invitation_count: number
+    }>(`${root}/roles/${id}`, { query: { offset, limit: 25 } }),
+  actors: (
+    actorType: string,
+    query: { q?: string; offset?: number; limit?: number; id?: string } = {}
+  ) =>
+    sdk.client.fetch<{
+      actors: { id: string; label: string; description?: string }[]
+      count: number
+      offset: number
+      limit: number
+    }>(`${root}/actors/${encodeURIComponent(actorType)}`, { query }),
+  evaluate: (body: {
+    actor_type: string
+    actor_id: string
+    permission: string
+    context: PermissionContext
+  }) =>
+    sdk.client.fetch<{ decision: PermissionDecision }>(`${root}/evaluate`, {
+      method: "POST",
+      body,
+    }),
   invitations: (offset: number, q = "") =>
     sdk.client.fetch<{ invitations: Invitation[]; count: number }>(
       `${root}/invites`,
@@ -95,7 +134,10 @@ export const accessApi = {
   deleteUser: (id: string) =>
     sdk.client.fetch(`${root}/staff/${id}`, { method: "DELETE" }),
   permissions: () =>
-    sdk.client.fetch<{ permissions: PermissionEntry[] }>(`${root}/permissions`),
+    sdk.client.fetch<{
+      permissions: PermissionEntry[]
+      actor_types?: string[]
+    }>(`${root}/permissions`),
   staff: (offset: number, q = "") =>
     sdk.client.fetch<{ staff: Staff[]; count: number }>(`${root}/staff`, {
       query: { offset, limit: 25, ...(q ? { q } : {}) },

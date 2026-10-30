@@ -30,6 +30,11 @@
     "./permissions": "./.medusa/server/src/lib/access/permissions.js",
     "./policy": "./.medusa/server/src/lib/access/policy.js",
     "./bootstrap": "./.medusa/server/src/scripts/bootstrap-superuser.js",
+    "./sync-roles": "./.medusa/server/src/scripts/sync-configured-roles.js",
+    "./roles": "./.medusa/server/src/lib/access/roles.js",
+    "./actors": "./.medusa/server/src/lib/access/actors.js",
+    "./define-permission": "./.medusa/server/src/lib/access/define-permission.js",
+    "./explain": "./.medusa/server/src/lib/access/explain.js",
     "./middlewares": "./.medusa/server/src/api/middlewares.js",
     "./*": "./.medusa/server/src/*.js",
     "./admin/access": {
@@ -58,6 +63,7 @@
     "test:integration": "node scripts/test-integration.mjs"
   },
   "peerDependencies": {
+    "@medusajs/dashboard": "^2.22.1",
     "@medusajs/admin-sdk": "^2.22.1",
     "@medusajs/framework": "^2.22.1",
     "@medusajs/icons": "^2.22.1",
@@ -69,6 +75,7 @@
     "@tanstack/react-query": "^5.64.2"
   },
   "devDependencies": {
+    "@medusajs/dashboard": "2.22.1",
     "@playwright/test": "1.64.1",
     "@swc/core": "^1.15.0",
     "@testing-library/dom": "10.4.2",

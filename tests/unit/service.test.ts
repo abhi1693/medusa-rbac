@@ -93,11 +93,25 @@ describe("access service", () => {
   it("reads roles without fetching unrelated staff and filters requested users", async () => {
     const h = harness([reader], [reader], [staff])
     expect(await h.service.snapshot(undefined, h.context)).toEqual({
-      roles: [reader],
+      roles: [
+        expect.objectContaining({
+          ...reader,
+          source: "admin",
+          actor_count: 0,
+          pending_invitation_count: 0,
+        }),
+      ],
       staff: [],
     })
     expect(await h.service.snapshot(["user"], h.context)).toEqual({
-      roles: [reader],
+      roles: [
+        expect.objectContaining({
+          ...reader,
+          source: "admin",
+          actor_count: 0,
+          pending_invitation_count: 0,
+        }),
+      ],
       staff: [staff],
     })
     expect(h.execute.mock.calls[2][1]).toEqual(['["user"]'])
@@ -357,7 +371,11 @@ describe("access service", () => {
         sql.startsWith("insert into rbac_access_role")
       )
     ).toHaveLength(1)
-    expect(h.execute.mock.calls[2][1][1]).toBe(JSON.stringify(PERMISSION_IDS))
+    expect(h.execute.mock.calls[2][1].slice(1)).toEqual([
+      "superuser",
+      "Superuser",
+      JSON.stringify(PERMISSION_IDS),
+    ])
     expect(h.execute.mock.calls.at(-1)![1].slice(1, 4)).toEqual([
       "user",
       "bootstrap_superuser",

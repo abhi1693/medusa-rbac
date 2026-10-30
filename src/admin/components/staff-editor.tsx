@@ -35,6 +35,9 @@ export const StaffEditor = ({
       <Drawer.Content>
         <Drawer.Header>
           <Drawer.Title>Manage staff access</Drawer.Title>
+          <Drawer.Description>
+            Choose the roles that grant this account access.
+          </Drawer.Description>
         </Drawer.Header>
         <Drawer.Body className="flex min-h-0 flex-col gap-y-5 overflow-y-auto">
           <Text>{staff.email}</Text>

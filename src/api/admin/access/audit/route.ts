@@ -45,7 +45,10 @@ export async function GET(
       } | null
       return {
         ...event,
-        actor_label: userNames.get(event.actor_id) || "Unknown user",
+        actor_label:
+          event.actor_id === "system:configuration"
+            ? "Configuration"
+            : userNames.get(event.actor_id) || "Unknown user",
         target_label:
           userNames.get(event.target_id) ||
           detail?.after?.name ||

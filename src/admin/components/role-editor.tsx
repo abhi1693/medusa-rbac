@@ -4,14 +4,13 @@ import {
   parseRuleDrafts,
 } from "./permission-rules"
 import { useState } from "react"
+import { PermissionPicker } from "./permission-picker"
+import { roleIsManaged } from "../lib/access-presentation"
 import {
   Button,
-  Checkbox,
   FocusModal,
   Tabs,
-  Text,
   Alert,
-  Heading,
   Input,
   Label,
   toast,
@@ -28,6 +27,7 @@ import type { Permission } from "../../lib/access/permissions"
 
 type Props = {
   role?: Role
+  initialRole?: Role
   permissions: PermissionEntry[]
   open: boolean
   readOnly?: boolean
@@ -36,17 +36,22 @@ type Props = {
 
 export const RoleEditor = ({
   role,
+  initialRole,
   permissions,
   open,
   onClose,
-  readOnly = false,
+  readOnly: viewOnly = false,
 }: Props) => {
-  const [search, setSearch] = useState("")
-  const [name, setName] = useState(role?.name || "")
-  const [selected, setSelected] = useState<Permission[]>(
-    role?.permissions || []
+  const readOnly = viewOnly || Boolean(role && roleIsManaged(role))
+  const [name, setName] = useState(
+    role?.name || (initialRole ? `${initialRole.name} copy` : "")
   )
-  const [rules, setRules] = useState(() => ruleDrafts(role?.rules || []))
+  const [selected, setSelected] = useState<Permission[]>(
+    role?.permissions || initialRole?.permissions || []
+  )
+  const [rules, setRules] = useState(() =>
+    ruleDrafts(role?.rules || initialRole?.rules || [])
+  )
   const refresh = useRefreshAccess()
   const save = useMutation({
     mutationFn: () =>
@@ -119,56 +124,12 @@ export const RoleEditor = ({
                 value="permissions"
                 className="flex flex-col gap-y-6 pt-6"
               >
-                <Input
-                  aria-label="Search permissions"
-                  type="search"
-                  placeholder="Search permissions"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
+                <PermissionPicker
+                  permissions={permissions}
+                  selected={selected}
+                  onChange={setSelected}
+                  readOnly={readOnly}
                 />
-                {[
-                  ...new Set(
-                    permissions
-                      .filter((permission) =>
-                        `${permission.label} ${permission.group} ${permission.id}`
-                          .toLowerCase()
-                          .includes(search.toLowerCase())
-                      )
-                      .map((p) => p.group)
-                  ),
-                ].map((group) => (
-                  <div key={group} className="flex flex-col gap-y-3">
-                    <Heading level="h2">{group}</Heading>
-                    {permissions
-                      .filter(
-                        (p) =>
-                          p.group === group &&
-                          `${p.label} ${p.id} ${p.group}`
-                            .toLowerCase()
-                            .includes(search.toLowerCase())
-                      )
-                      .map((permission) => (
-                        <label
-                          key={permission.id}
-                          className="flex items-start gap-x-3 text-sm"
-                        >
-                          <Checkbox
-                            aria-label={permission.label}
-                            disabled={readOnly}
-                            checked={selected.includes(permission.id)}
-                            onCheckedChange={(checked) =>
-                              setSelected((current) =>
-                                checked
-                                  ? [...current, permission.id]
-                                  : current.filter((id) => id !== permission.id)
-                              )
-                            }
-                          />
-                          <span>{permission.label}</span>
-                        </label>
-                      ))}
-                  </div>
-                ))}
               </Tabs.Content>
               <Tabs.Content value="rules" className="pt-6">
                 <PermissionRules
@@ -182,7 +143,11 @@ export const RoleEditor = ({
           </form>
         </FocusModal.Body>
         <FocusModal.Footer>
-          <Button variant="secondary" onClick={onClose}>
+          <Button
+            variant="secondary"
+            disabled={save.isPending}
+            onClick={onClose}
+          >
             {readOnly ? "Close" : "Cancel"}
           </Button>
           {!readOnly && (

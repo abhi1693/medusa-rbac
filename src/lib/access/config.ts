@@ -1,8 +1,19 @@
 import nativeRoutes from "./native-routes.json"
 import type { MedusaRequest } from "@medusajs/framework/http"
-import { PERMISSIONS, type AccessPrincipal } from "./permissions"
+import {
+  PERMISSIONS,
+  validatePermissions,
+  type AccessPrincipal,
+} from "./permissions"
 import { policyFor, type Policy } from "./policy"
 import { permissionKeyMatches as matchesPermission } from "./permission-key"
+import {
+  SUPERUSER_ROLE,
+  type RoleDefinition,
+  type ConfiguredRoleDefinition,
+} from "./roles"
+import { explainPermission } from "./explain"
+import type { ActorProvider } from "./actors"
 
 export type PermissionDefinition = readonly [
   id: string,
@@ -23,16 +34,15 @@ export type RoutePolicy = Policy & { method: string; path: string }
 export type AccessControlOptions = {
   /** Additional permissions; native permission identifiers cannot be replaced. */
   permissions?: PermissionDefinition[]
+  /** Optional application roles managed in code, without automatic assignments. */
+  roles?: readonly RoleDefinition[]
   /** Explicit policies for custom APIs. Native/management policies take precedence. */
   routes?: RoutePolicy[]
   contextResolvers?: ((
     request: MedusaRequest
   ) => PermissionContext | Promise<PermissionContext>)[]
   /** Resolvers for custom APIs only. The Admin API always requires a native user. */
-  actors?: {
-    type: string
-    validate: (id: string, request: MedusaRequest) => Promise<void>
-  }[]
+  actors?: ActorProvider[]
 }
 
 export function createAccessConfig(options: AccessControlOptions = {}) {
@@ -50,6 +60,45 @@ export function createAccessConfig(options: AccessControlOptions = {}) {
     ids.add(id)
     permissions.push([id, label, group])
   }
+  const roleKeys = new Set<string>()
+  const roleNames = new Set<string>([SUPERUSER_ROLE.name.toLowerCase()])
+  if (
+    options.roles !== undefined &&
+    (!Array.isArray(options.roles) || options.roles.length > 100)
+  )
+    throw new Error("Configured roles must be an array of at most 100 entries")
+  const roles: ConfiguredRoleDefinition[] = (options.roles || []).map(
+    (definition) => {
+      if (
+        !definition ||
+        typeof definition !== "object" ||
+        Array.isArray(definition) ||
+        Object.keys(definition).some(
+          (key) => !["key", "name", "permissions", "rules"].includes(key)
+        ) ||
+        typeof definition.key !== "string" ||
+        !/^[a-z][a-z0-9_-]{0,63}$/.test(definition.key) ||
+        definition.key === SUPERUSER_ROLE.key ||
+        roleKeys.has(definition.key) ||
+        typeof definition.name !== "string" ||
+        !definition.name.trim() ||
+        definition.name.trim().length > 100 ||
+        roleNames.has(definition.name.trim().toLowerCase())
+      )
+        throw new Error("Invalid, reserved or duplicate configured role")
+      roleKeys.add(definition.key)
+      roleNames.add(definition.name.trim().toLowerCase())
+      return {
+        key: definition.key,
+        name: definition.name.trim(),
+        permissions: validatePermissions(
+          definition.permissions === undefined ? [] : definition.permissions,
+          [...ids]
+        ),
+        rules: validateRules(definition.rules, [...ids]),
+      }
+    }
+  )
   const nativeRoots = new Set(
     nativeRoutes.map((route) => route.path.split("/")[2])
   )
@@ -83,7 +132,8 @@ export function createAccessConfig(options: AccessControlOptions = {}) {
       (actor) =>
         !actor.type ||
         ["user", "customer"].includes(actor.type) ||
-        typeof actor.validate !== "function"
+        typeof actor.validate !== "function" ||
+        (actor.list !== undefined && typeof actor.list !== "function")
     )
   )
     throw new Error(
@@ -91,6 +141,7 @@ export function createAccessConfig(options: AccessControlOptions = {}) {
     )
   return {
     permissions,
+    roles,
     ids: [...ids],
     actors,
     contextResolvers: options.contextResolvers || [],
@@ -167,7 +218,9 @@ export function validateRules(
     )
       throw new Error("Invalid rule conditions")
     return {
-      ...rule,
+      permission: rule.permission,
+      effect: rule.effect,
+      ...(rule.priority !== undefined ? { priority: rule.priority } : {}),
       ...(conditions ? { conditions: { ...conditions } } : {}),
     }
   })
@@ -179,35 +232,5 @@ export function evaluatePermission(
   permission: string,
   context: PermissionContext = {}
 ): boolean {
-  if (!principal.active) return false
-  if (principal.is_superuser) return true
-  const candidates = (principal.rules || []).filter(
-    (rule) =>
-      matchesPermission(rule.permission, permission) &&
-      Object.entries(rule.conditions || {}).every(
-        ([key, expected]) =>
-          Object.hasOwn(context, key) &&
-          (Array.isArray(expected)
-            ? expected.includes(context[key])
-            : expected === context[key])
-      )
-  )
-  if (principal.permissions.includes(permission))
-    candidates.push({ permission, effect: "allow" })
-  const score = (rule: PermissionRule) => [
-    rule.priority || 0,
-    rule.permission === permission ? 1000 : rule.permission.split(".").length,
-    Object.keys(rule.conditions || {}).length,
-  ]
-  candidates.sort((a, b) => {
-    const left = score(a),
-      right = score(b)
-    return (
-      right[0] - left[0] ||
-      right[1] - left[1] ||
-      right[2] - left[2] ||
-      Number(b.effect === "deny") - Number(a.effect === "deny")
-    )
-  })
-  return candidates[0]?.effect === "allow"
+  return explainPermission(principal, permission, context).allowed
 }

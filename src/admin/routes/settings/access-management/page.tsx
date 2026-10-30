@@ -2,6 +2,7 @@ import { defineRouteConfig } from "@medusajs/admin-sdk"
 import { Alert, Container, Heading, Tabs, Text } from "@medusajs/ui"
 import { useSearchParams } from "react-router-dom"
 import { errorMessage, useAccess } from "../../../lib/access"
+import { PermissionCatalog } from "../../../components/access-management/permission-catalog"
 import { RolesList } from "../../../components/access-management/roles-list"
 import { UsersList } from "../../../components/access-management/users-list"
 import { ActivityList } from "../../../components/access-management/activity-list"
@@ -38,6 +39,9 @@ const AccessManagement = () => {
     ...(hasPermissionCandidate(access, "roles.view")
       ? [{ id: "roles", label: "Roles" }]
       : []),
+    ...(hasPermissionCandidate(access, "roles.view")
+      ? [{ id: "permissions", label: "Permissions" }]
+      : []),
     ...(hasPermissionCandidate(access, "staff.view")
       ? [{ id: "users", label: "Users" }]
       : []),
@@ -61,7 +65,10 @@ const AccessManagement = () => {
       }}
       className="flex flex-col gap-y-3"
     >
-      <Tabs.List aria-label="Access management">
+      <Tabs.List
+        aria-label="Access management"
+        className="flex h-auto w-full flex-wrap justify-start"
+      >
         {views.map((view) => (
           <Tabs.Trigger key={view.id} value={view.id}>
             {view.label}
@@ -70,6 +77,12 @@ const AccessManagement = () => {
       </Tabs.List>
       <Tabs.Content value="roles">
         <RolesList userId={access.actor_id} superuser={access.is_superuser} />
+      </Tabs.Content>
+      <Tabs.Content value="permissions">
+        <PermissionCatalog
+          userId={access.actor_id}
+          superuser={access.is_superuser}
+        />
       </Tabs.Content>
       <Tabs.Content value="users">
         <UsersList userId={access.actor_id} superuser={access.is_superuser} />

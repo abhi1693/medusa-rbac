@@ -76,6 +76,10 @@ it("uses the native SDK for all versioned access requests", async () => {
   await accessApi.staffUser("staff")
   await accessApi.me()
   await accessApi.roles()
+  await accessApi.actors("user")
+  expect(fetcher).toHaveBeenCalledWith("/admin/access/actors/user", {
+    query: {},
+  })
   await accessApi.permissions()
   await accessApi.staff(25)
   await accessApi.audit(50)
@@ -237,4 +241,15 @@ it("searches role permissions and protects a save in progress from dismissal", a
     resolve({})
   })
   await waitFor(() => expect(close).toHaveBeenCalled())
+})
+
+it("keeps direct system-role previews read-only and explains their protection", () => {
+  mount(
+    <RoleEditor open role={owner} permissions={permissions} onClose={vi.fn()} />
+  )
+  expect(screen.getByText(/protected system role/)).toBeVisible()
+  expect(screen.getByLabelText("Role name")).toBeDisabled()
+  expect(
+    screen.queryByRole("button", { name: "Save role" })
+  ).not.toBeInTheDocument()
 })

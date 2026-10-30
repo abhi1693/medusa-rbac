@@ -114,6 +114,18 @@ export async function enforceAdminAccess(
         })
       }
     }
+    if (req.method === "DELETE" && /^\/admin\/users\/[^/]+$/.test(path)) {
+      // Keep native Admin actions on the guarded, compensatable public workflow.
+      // 307 preserves DELETE; the destination independently checks authorization.
+      const rawId = req.originalUrl
+        .split("?")[0]
+        .replace(/\/+$/, "")
+        .split("/")[3]
+      return res.redirect(
+        307,
+        `/admin/access/staff/${encodeURIComponent(decodeURIComponent(rawId))}`
+      )
+    }
     return next()
   } catch (error) {
     return next(error)
