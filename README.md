@@ -92,7 +92,7 @@ Open **Settings → Access management** to inspect roles and permissions, create
 | `roles` | Optional application-owned roles declared with `defineRole({ key, name, permissions, rules })`. Definitions are synchronized explicitly and grant no automatic assignments. |
 | `routes` | Explicit method/path policies for custom Admin APIs. Paths support named segments such as `:id`; `HEAD` uses the corresponding `GET` policy. Require every listed permission, or set `superuser: true`. |
 | `contextResolvers` | Async functions deriving rule context from trusted application data. Actor identity, method and route remain server-owned. |
-| `actors` | `{ type, validate(id, request) }` identity providers for custom actor types. Native users and customers are validated through Medusa's User and Customer modules. |
+| `actors` | `{ type, validate(id, request), list?(query, request) }` providers for custom actor types. Validation establishes identity; the optional paginated search adapter supplies account-picker results. Native users/customers use their owning Medusa modules. |
 
 ## Roles defined in code
 
@@ -149,6 +149,23 @@ middlewares: [
 
 The module exposes `actorPrincipal({ type, id })`, `actorAccess({ type, id })` and the `set_actor` mutation for backend workflows. Native commerce Store APIs retain their normal behavior unless an application explicitly adds permission enforcement.
 
+### Custom account search
+
+The permission checker's account picker loads Admin users and customers through Medusa's User and Customer services. Custom actor providers can add `list(query, request)` alongside their required `validate(id, request)` function. The public `ActorProvider`, `ActorListQuery`, `ActorListResult` and `ActorOption` types are exported from `@abhi1693/medusa-rbac/actors`.
+
+The search adapter receives:
+
+| Field | Meaning |
+| --- | --- |
+| `q?` | The user's search text. Match suitable labels, names or email fields in your owning module. |
+| `id?` | An exact account ID used to restore a selected record that is outside the current search page. Return that record alone, or an empty result if absent. |
+| `offset` | The number of matching records to skip. |
+| `limit` | The maximum number of records to return, between 1 and 100. |
+
+Return `{ actors, count }`, where each actor has `{ id, label, description? }` and `count` is the total number of matching records before pagination. Restrict results to the provider's actor type, preserve stable ordering across pages and honor exact-ID queries. Resolve the owning service through the supplied request; do not search another module's tables directly. The API adds `offset` and `limit` to the response for the native paginated picker.
+
+`GET /admin/access/actors/:actor_type` accepts these query fields and requires an active native-user Superuser. It returns display records for selection, without exposing role assignments or authentication data. A custom provider without `list` can still validate identities for server checks; its account search reports that it is unavailable. The picker requires selection from search results. The evaluation endpoint independently calls `validate` before checking permissions.
+
 ## Permission rules
 
 An ordinary role has explicit `permissions` and optional `rules`. For example:
@@ -197,7 +214,7 @@ The plugin works independently of Admin Kit. A host may separately install [medu
 
 ## Permission diagnostics
 
-The **Permissions** view lists registered identifiers, labels and groups. A Superuser can choose **Check access**, select an Admin user, customer or configured actor, and supply a context to inspect the current decision. The preview validates the actor through its owning module and uses the same permission engine as enforcement. It returns the outcome, reason, winning match and other matching rules. Actor identity comes from the selected account.
+The **Permissions** view lists registered identifiers, labels and groups. A Superuser can choose **Check access**, choose an account type, then search and select an existing account by name or email. The results are limited to the selected actor type and load additional pages as needed. Changing the type clears the previous account and result. After selecting an account, supply a context to inspect the current decision. The preview validates the actor through its owning module and uses the same permission engine as enforcement. It returns the outcome, reason, winning match and other matching rules. Actor identity comes from the selected account.
 
 This is a permission preview: it does not grant access, invoke a route, run context resolvers for a hypothetical resource, or verify collection filtering. Route policies, trusted request context and application data scoping still apply to a real request. Access Activity records administrative changes, including configured-role synchronization; it does not store every permission decision.
 

@@ -76,6 +76,7 @@ it("shows a deep-linked role with readable grants, assignment context and native
   const { user } = mount()
   expect(await screen.findByRole("heading", { name: "Reader" })).toBeVisible()
   expect(screen.getByText("View products")).toBeVisible()
+  expect(screen.getByText("1 grant")).toBeVisible()
   expect(screen.getByRole("link", { name: "Staff member" })).toHaveAttribute(
     "href",
     "/settings/users/user_other"

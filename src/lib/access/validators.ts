@@ -30,6 +30,10 @@ export const pageInput = z.object({
 export const staffPageInput = pageInput.extend({
   q: z.string().trim().max(100).optional(),
 })
+export const actorPageInput = staffPageInput.extend({
+  id: z.string().trim().min(1).max(100).optional(),
+})
+export type ActorPageInput = z.infer<typeof actorPageInput>
 export type StaffPageInput = z.infer<typeof staffPageInput>
 export type PageInput = z.infer<typeof pageInput>
 export const inviteInput = z

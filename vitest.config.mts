@@ -31,6 +31,11 @@ export default defineConfig({
     },
   ],
   test: {
+    server: {
+      deps: {
+        inline: ["@medusajs/dashboard", "@medusajs/ui"],
+      },
+    },
     include: [
       "tests/unit/**/*.test.ts",
       "tests/components/**/*.test.tsx",

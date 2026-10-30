@@ -23,7 +23,9 @@ export function PermissionSummary({
       <div className="flex items-center justify-between gap-3 px-6 py-4">
         <Heading level="h2">Permissions</Heading>
         <Badge size="2xsmall">
-          {role.is_superuser ? "All permissions" : `${grants.length} grants`}
+          {role.is_superuser
+            ? "All permissions"
+            : `${grants.length} ${grants.length === 1 ? "grant" : "grants"}`}
         </Badge>
       </div>
       {role.is_superuser && (

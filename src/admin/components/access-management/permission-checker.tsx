@@ -5,7 +5,6 @@ import {
   Badge,
   Button,
   Drawer,
-  Input,
   Label,
   Select,
   Text,
@@ -13,6 +12,7 @@ import {
 } from "@medusajs/ui"
 import { accessApi, errorMessage, type PermissionEntry } from "../../lib/access"
 import { isPermissionContext } from "../../../lib/access/permission-context"
+import { ActorPicker } from "./actor-picker"
 
 const reasons = {
   inactive: "This account has no active access.",
@@ -34,8 +34,12 @@ export function PermissionChecker({
   onClose: () => void
 }) {
   const [actorType, setActorType] = useState("user")
-  const [actorId, setActorId] = useState(userId)
+  const [actorId, setActorId] = useState("")
+  const [defaultActorId, setDefaultActorId] = useState<string | undefined>(
+    userId
+  )
   const [context, setContext] = useState("{}")
+  const [searching, setSearching] = useState(false)
   const [validation, setValidation] = useState("")
   const check = useMutation({ mutationFn: accessApi.evaluate })
   const clear = () => {
@@ -71,7 +75,11 @@ export function PermissionChecker({
               clear()
               try {
                 const parsed: unknown = JSON.parse(context)
-                if (!isPermissionContext(parsed) || !actorId.trim())
+                if (
+                  !isPermissionContext(parsed) ||
+                  !actorId.trim() ||
+                  searching
+                )
                   throw new Error("Invalid permission context")
                 const input = {
                   actor_type: actorType,
@@ -82,7 +90,7 @@ export function PermissionChecker({
                 check.mutate(input)
               } catch {
                 setValidation(
-                  "Enter an actor ID and a JSON object containing at most 30 text, number, boolean or null context values."
+                  "Choose an account and enter a JSON object containing at most 30 text, number, boolean or null context values."
                 )
               }
             }}
@@ -93,6 +101,9 @@ export function PermissionChecker({
                 value={actorType}
                 onValueChange={(value) => {
                   clear()
+                  setActorId("")
+                  setDefaultActorId(undefined)
+                  setSearching(false)
                   setActorType(value)
                 }}
               >
@@ -113,15 +124,21 @@ export function PermissionChecker({
               </Select>
             </div>
             <div className="flex flex-col gap-y-2">
-              <Label htmlFor="permission-actor-id">Actor ID</Label>
-              <Input
-                id="permission-actor-id"
+              <Label htmlFor="permission-account">Account</Label>
+              <ActorPicker
+                key={actorType}
+                actorType={actorType}
+                userId={userId}
                 value={actorId}
-                required
-                maxLength={100}
-                onChange={(event) => {
+                initialId={defaultActorId}
+                onChange={(id) => {
                   clear()
-                  setActorId(event.target.value)
+                  setSearching(false)
+                  setActorId(id)
+                }}
+                onSearchingChange={(value) => {
+                  clear()
+                  setSearching(value)
                 }}
               />
             </div>
@@ -183,6 +200,7 @@ export function PermissionChecker({
           <Button
             type="submit"
             form="permission-check"
+            disabled={!actorId || searching}
             isLoading={check.isPending}
           >
             Check access

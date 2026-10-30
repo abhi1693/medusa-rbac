@@ -168,8 +168,9 @@ export function policyFor(method: string, path: string): Policy | null {
   if (verb === "GET" && path === "/admin/access/invites")
     return { permissions: [], superuser: true }
   if (
-    ["GET", "POST"].includes(verb) &&
-    /^\/admin\/access\/actors\/[^/]+\/[^/]+$/.test(path)
+    (verb === "GET" && /^\/admin\/access\/actors\/[^/]+$/.test(path)) ||
+    (["GET", "POST"].includes(verb) &&
+      /^\/admin\/access\/actors\/[^/]+\/[^/]+$/.test(path))
   )
     return { permissions: [], superuser: true }
   if (verb === "GET" && /^\/admin\/access\/roles(?:\/[^/]+)?$/.test(path))

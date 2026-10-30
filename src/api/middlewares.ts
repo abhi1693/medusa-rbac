@@ -18,10 +18,21 @@ import {
   acceptInviteInput,
   acceptInviteQuery,
   evaluateInput,
+  actorPageInput,
 } from "../lib/access/validators"
 
 export default defineMiddlewares({
   routes: [
+    {
+      matcher: "/admin/access/actors/:actor_type",
+      method: "GET",
+      middlewares: [
+        validateAndTransformQuery(actorPageInput, {
+          defaults: [],
+          isList: true,
+        }),
+      ],
+    },
     {
       matcher: "/admin/access/evaluate",
       method: "POST",

@@ -76,6 +76,10 @@ it("uses the native SDK for all versioned access requests", async () => {
   await accessApi.staffUser("staff")
   await accessApi.me()
   await accessApi.roles()
+  await accessApi.actors("user")
+  expect(fetcher).toHaveBeenCalledWith("/admin/access/actors/user", {
+    query: {},
+  })
   await accessApi.permissions()
   await accessApi.staff(25)
   await accessApi.audit(50)

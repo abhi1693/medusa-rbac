@@ -96,6 +96,16 @@ export const accessApi = {
       actor_count: number
       pending_invitation_count: number
     }>(`${root}/roles/${id}`, { query: { offset, limit: 25 } }),
+  actors: (
+    actorType: string,
+    query: { q?: string; offset?: number; limit?: number; id?: string } = {}
+  ) =>
+    sdk.client.fetch<{
+      actors: { id: string; label: string; description?: string }[]
+      count: number
+      offset: number
+      limit: number
+    }>(`${root}/actors/${encodeURIComponent(actorType)}`, { query }),
   evaluate: (body: {
     actor_type: string
     actor_id: string

@@ -11,6 +11,12 @@ export { definePermission } from "./lib/access/define-permission"
 export { explainPermission } from "./lib/access/explain"
 export type { PermissionDecision } from "./lib/access/explain"
 export type {
+  ActorProvider,
+  ActorListQuery,
+  ActorListResult,
+  ActorOption,
+} from "./lib/access/actors"
+export type {
   ActorReference,
   ActorAccessRecord,
 } from "./modules/access-control/service"

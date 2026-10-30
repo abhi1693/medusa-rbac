@@ -13,6 +13,7 @@ import {
   type ConfiguredRoleDefinition,
 } from "./roles"
 import { explainPermission } from "./explain"
+import type { ActorProvider } from "./actors"
 
 export type PermissionDefinition = readonly [
   id: string,
@@ -41,10 +42,7 @@ export type AccessControlOptions = {
     request: MedusaRequest
   ) => PermissionContext | Promise<PermissionContext>)[]
   /** Resolvers for custom APIs only. The Admin API always requires a native user. */
-  actors?: {
-    type: string
-    validate: (id: string, request: MedusaRequest) => Promise<void>
-  }[]
+  actors?: ActorProvider[]
 }
 
 export function createAccessConfig(options: AccessControlOptions = {}) {
@@ -134,7 +132,8 @@ export function createAccessConfig(options: AccessControlOptions = {}) {
       (actor) =>
         !actor.type ||
         ["user", "customer"].includes(actor.type) ||
-        typeof actor.validate !== "function"
+        typeof actor.validate !== "function" ||
+        (actor.list !== undefined && typeof actor.list !== "function")
     )
   )
     throw new Error(

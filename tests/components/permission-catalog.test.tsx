@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest"
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { TooltipProvider } from "@medusajs/ui"
@@ -13,12 +13,49 @@ const permissions = [
 let fetcher: any
 let catalog: any
 let evaluation: any
+const accounts = {
+  user: [
+    { id: "user_1", label: "Staff user", description: "staff@example.test" },
+  ],
+  customer: [
+    {
+      id: "customer_1",
+      label: "Customer One",
+      description: "buyer@example.test",
+    },
+  ],
+  vendor: [
+    {
+      id: "vendor_1",
+      label: "Vendor shop",
+      description: "vendor@example.test",
+    },
+  ],
+}
 beforeEach(() => {
   catalog = { permissions, actor_types: ["user", "customer", "vendor"] }
   evaluation = { decision: { allowed: true, reason: "superuser", matches: [] } }
   fetcher = vi
     .spyOn(sdk.client, "fetch")
-    .mockImplementation(async (_url, options: any) => {
+    .mockImplementation(async (url, options: any) => {
+      if (String(url).includes("/actors/")) {
+        const type = String(url).split("/").at(-1)! as keyof typeof accounts
+        const query = options?.query || {}
+        const rows = accounts[type].filter(
+          (actor) =>
+            (!query.id || actor.id === query.id) &&
+            (!query.q ||
+              `${actor.label} ${actor.description}`
+                .toLowerCase()
+                .includes(String(query.q).toLowerCase()))
+        )
+        return {
+          actors: rows,
+          count: rows.length,
+          offset: query.offset || 0,
+          limit: query.limit || 25,
+        }
+      }
       const response = options?.method ? evaluation : catalog
       if (response instanceof Error) throw response
       return response
@@ -35,7 +72,7 @@ function mount(superuser = true) {
       </TooltipProvider>
     </QueryClientProvider>
   )
-  return { ...view, user: userEvent.setup() }
+  return { ...view, client, user: userEvent.setup() }
 }
 async function open(user: ReturnType<typeof userEvent.setup>) {
   await user.click(
@@ -44,6 +81,9 @@ async function open(user: ReturnType<typeof userEvent.setup>) {
   expect(
     await screen.findByRole("heading", { name: "Check permission" })
   ).toBeVisible()
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Check access" })).toBeEnabled()
+  )
 }
 it("browses registered permission identifiers and searches across groups", async () => {
   const { user } = mount(false)
@@ -153,8 +193,13 @@ it("supports customer/custom actors and clears a decision when its inputs change
   await user.click(screen.getByRole("combobox", { name: "Account type" }))
   await user.click(screen.getByRole("option", { name: "Customer" }))
   expect(screen.queryByText("Allowed")).not.toBeInTheDocument()
-  await user.clear(screen.getByLabelText("Actor ID"))
-  await user.type(screen.getByLabelText("Actor ID"), "customer_1")
+  expect(screen.getByRole("button", { name: "Check access" })).toBeDisabled()
+  await user.click(screen.getByRole("combobox", { name: "Account" }))
+  await user.click(
+    await screen.findByRole("option", {
+      name: "Customer One · buyer@example.test",
+    })
+  )
   await user.clear(screen.getByLabelText("Context"))
   await user.paste('{"region_id":"north"}')
   await user.click(screen.getByRole("button", { name: "Check access" }))
@@ -192,4 +237,54 @@ it("validates context before a request, reports request failures and supplies na
   await user.click(screen.getByRole("button", { name: "Check access" }))
   expect(await screen.findByRole("alert")).toHaveTextContent("Actor not found")
   await user.keyboard("{Escape}")
+})
+
+it("does not preview an uncommitted search or an empty selection even on form submission", async () => {
+  const { user } = mount()
+  await open(user)
+  const input = screen.getByRole("combobox", { name: "Account" })
+  await user.click(input)
+  await user.paste("No matching account")
+  expect(screen.getByRole("button", { name: "Check access" })).toBeDisabled()
+  await user.keyboard("{Enter}")
+  expect(fetcher).not.toHaveBeenCalledWith(
+    "/admin/access/evaluate",
+    expect.anything()
+  )
+  fireEvent.submit(document.getElementById("permission-check")!)
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Choose an account"
+  )
+  await user.click(screen.getByRole("combobox", { name: "Account type" }))
+  await user.click(screen.getByRole("option", { name: "Customer" }))
+  fireEvent.submit(document.getElementById("permission-check")!)
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Choose an account"
+  )
+  expect(fetcher).not.toHaveBeenCalledWith(
+    "/admin/access/evaluate",
+    expect.anything()
+  )
+})
+
+it("unmounts the account picker immediately when management access is revoked", async () => {
+  const { user, rerender, client } = mount()
+  await open(user)
+  expect(screen.getByRole("combobox", { name: "Account" })).toBeVisible()
+  rerender(
+    <QueryClientProvider client={client}>
+      <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+        <PermissionCatalog userId="user_1" superuser={false} />
+      </TooltipProvider>
+    </QueryClientProvider>
+  )
+  expect(
+    screen.queryByRole("heading", { name: "Check permission" })
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole("combobox", { name: "Account" })
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByText("Staff user · staff@example.test")
+  ).not.toBeInTheDocument()
 })

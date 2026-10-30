@@ -104,7 +104,7 @@ export function PermissionCatalog({
         error={catalog.error}
         empty="No permissions registered"
       />
-      {selected && (
+      {superuser && selected && (
         <PermissionChecker
           permission={selected}
           actorTypes={catalog.data?.actor_types || ["user", "customer"]}
