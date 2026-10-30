@@ -62,7 +62,8 @@
     "format:check": "prettier --check src tests scripts *.json *.mts",
     "access:snapshot": "node scripts/snapshot-native-routes.mjs",
     "test:integration": "node scripts/test-integration.mjs",
-    "ci:test": "npm test && npm run test:integration",
+    "test:publish": "node --test scripts/test-publish-npm.mjs",
+    "ci:test": "npm run test:publish && npm test && npm run test:integration",
     "ci:build": "npm run build && node scripts/package-release.mjs --check-only",
     "release:package": "npm run build && node scripts/package-release.mjs"
   },

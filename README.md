@@ -1,7 +1,8 @@
 # Medusa RBAC
 
 [![CI](https://github.com/abhi1693/medusa-rbac/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/abhi1693/medusa-rbac/actions/workflows/ci.yml)
-[![Release preparation: 0.0.1](https://img.shields.io/badge/release_preparation-0.0.1-2563eb)](https://github.com/abhi1693/medusa-rbac/releases)
+[![GitHub release](https://img.shields.io/github/v/release/abhi1693/medusa-rbac?sort=semver)](https://github.com/abhi1693/medusa-rbac/releases)
+[![npm version](https://img.shields.io/npm/v/%40abhi1693%2Fmedusa-rbac)](https://www.npmjs.com/package/@abhi1693/medusa-rbac)
 [![Medusa >=2.22.2](https://img.shields.io/badge/Medusa-%E2%89%A52.22.2-7c3aed)](https://docs.medusajs.com/)
 [![Node.js >=22.22.0](https://img.shields.io/badge/Node.js-%E2%89%A522.22.0-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![MIT license](https://img.shields.io/github/license/abhi1693/medusa-rbac)](LICENSE)
@@ -30,19 +31,25 @@ Requires Medusa **2.22.2 or newer** and Node.js **22.22.0 or newer**. Validation
 
 ## Install
 
-Published GitHub releases include a prebuilt npm package with server, Admin and storefront-client exports. Once **v0.0.1** is published, install its archive:
+Install the versioned package from npm:
+
+```sh
+npm install @abhi1693/medusa-rbac@0.0.1
+```
+
+The npm package includes built server, Admin and storefront-client exports. Published GitHub releases provide the same package as a downloadable archive, with checksums and build provenance:
 
 ```sh
 npm install 'https://github.com/abhi1693/medusa-rbac/releases/download/v0.0.1/abhi1693-medusa-rbac-0.0.1.tgz'
 ```
 
-Draft release assets are not public. While v0.0.1 is being prepared, or when selecting a source revision, install from Git pinned to a reviewed commit:
+To install a source revision, use Git pinned to a reviewed commit:
 
 ```sh
 npm install 'git+https://github.com/abhi1693/medusa-rbac.git#<commit>'
 ```
 
-The Git dependency runs `prepare` to build server and Admin extensions. The release archive already contains those build outputs. Both methods install the package as `@abhi1693/medusa-rbac`.
+The Git dependency runs `prepare` to build server and Admin extensions. npm and release archives already contain those build outputs. All methods install the package as `@abhi1693/medusa-rbac`.
 
 For Medusa 2.22.2, review the [dependency compatibility configuration](https://github.com/abhi1693/medusa-rbac/blob/master/docs/dependency-compatibility.md). npm applies dependency overrides from your application's root `package.json`; installing this plugin does not apply the repository's overrides to your application.
 
@@ -357,7 +364,7 @@ npm pack --ignore-scripts --dry-run
 
 The tests cover native route inventories, middleware denial, configurable permission/role registries, role synchronization and removal, typed actor isolation, rule precedence/context and explanations, concurrency guards, workflow compensation and Admin components. Run `RBAC_TEST_DATABASE_URL=<local-postgres-url> npm run test:integration` for isolated PostgreSQL actor and invitation rollback/retry checks. Browser lifecycle checks also run in the consuming application’s isolated test harness. `npm run access:snapshot` refreshes the native inventory for a reviewed framework upgrade; generating a snapshot never authorizes new routes.
 
-Release preparation and package verification are documented in [Preparing a release](docs/releasing.md).
+Release preparation, npm publication and package verification are documented in [Preparing and publishing a release](docs/releasing.md).
 
 Framework references: [plugins](https://docs.medusajs.com/learn/fundamentals/plugins/create), [module options](https://docs.medusajs.com/learn/fundamentals/modules/options), [API middlewares](https://docs.medusajs.com/learn/fundamentals/api-routes/middlewares), [Admin widgets](https://docs.medusajs.com/learn/fundamentals/admin/widgets).
 
