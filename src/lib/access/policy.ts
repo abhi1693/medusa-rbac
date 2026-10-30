@@ -301,6 +301,16 @@ export function validateFieldSelection(
     ],
     "product-variants": [
       "inventory_quantity",
+      // Reviewed native Variant table/detail expansions. Inventory grants are
+      // checked separately by the Admin middleware.
+      "*inventory_items",
+      "*inventory_items.inventory",
+      "*inventory_items.inventory.location_levels",
+      "*options.option",
+      "*prices.price_rules",
+      "images.id",
+      "images.url",
+      "images.variants.id",
       "product.id",
       "product.title",
       "product.handle",

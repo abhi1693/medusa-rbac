@@ -261,6 +261,76 @@ it("requires inventory permission for reviewed inventory expansions", async () =
   expect(ok.next).toHaveBeenCalledWith()
 })
 it.each([
+  [
+    "GET",
+    "/admin/products/prod_native/variants",
+    "title,sku,thumbnail,*options,created_at,*inventory_items.inventory.location_levels,inventory_quantity,manage_inventory",
+  ],
+  [
+    "HEAD",
+    "/admin/products/prod_native/variants/variant_native",
+    "*inventory_items,*inventory_items.inventory,*inventory_items.inventory.location_levels,*options,*options.option,*prices,*prices.price_rules,+images.id,+images.url,+images.variants.id",
+  ],
+])(
+  "allows the reviewed native Variant read with inventory grants (%s %s)",
+  async (method, path, fields) => {
+    const superuser = harness(path, method)
+    superuser.req.query.fields = fields
+    await superuser.run()
+    expect(superuser.next).toHaveBeenCalledWith()
+    const authorized = harness(path, method)
+    authorized.req.query.fields = fields
+    authorized.access.principal.mockResolvedValue(
+      createPrincipal({
+        is_superuser: false,
+        permissions: ["products.view", "prices.view", "inventory.view"],
+      })
+    )
+    await authorized.run()
+    expect(authorized.next).toHaveBeenCalledWith()
+    const denied = harness(path, method)
+    denied.req.query.fields = fields
+    denied.access.principal.mockResolvedValue(
+      createPrincipal({
+        is_superuser: false,
+        permissions: ["products.view", "prices.view"],
+      })
+    )
+    await denied.run()
+    expect(denied.res.status).toHaveBeenCalledWith(403)
+    expect(denied.res.json).toHaveBeenCalledWith({
+      message: "Inventory access is required for these fields",
+    })
+  }
+)
+it("rejects unreviewed Variant subrelations and does not grant Variant-only fields on Products", async () => {
+  for (const [path, fields] of [
+    [
+      "/admin/products/prod_native/variants",
+      "*inventory_items.inventory.secret",
+    ],
+    [
+      "/admin/products/prod_native/variants/variant_native",
+      "*inventory_items.*",
+    ],
+    [
+      "/admin/products/prod_native/variants/variant_native",
+      "*prices.price_rules.price_set",
+    ],
+    ["/admin/products/prod_native/variants/variant_native", "*"],
+    ["/admin/products/prod_native", "*inventory_items"],
+  ]) {
+    const h = harness(path)
+    h.req.query.fields = fields
+    await h.run()
+    expect(h.res.status).toHaveBeenCalledWith(403)
+    expect(h.res.json).toHaveBeenCalledWith({
+      message: "This field selection is not allowed",
+    })
+    expect(h.next).not.toHaveBeenCalled()
+  }
+})
+it.each([
   ["POST", "/admin/products", { status: "published" }],
   ["POST", "/admin/products/p/variants", { prices: [] }],
   ["POST", "/admin/products/p", { status: "draft" }],

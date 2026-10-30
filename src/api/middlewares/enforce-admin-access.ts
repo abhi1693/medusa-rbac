@@ -48,6 +48,12 @@ export async function enforceAdminAccess(
     }
     const principal = await access.principal(auth.actor_id)
     const resource = path.split("/")[2]
+    // These nested native reads return Variant records, not Product records.
+    const fieldResource =
+      resource === "products" &&
+      /^\/admin\/products\/[^/]+\/variants(?:\/[^/]+)?$/.test(path)
+        ? "product-variants"
+        : resource
     const selfRead = isBootstrapRead(req.method, path)
     if (selfRead && path === "/admin/users/me")
       req.query.fields = "id,email,first_name,last_name,avatar_url"
@@ -82,7 +88,7 @@ export async function enforceAdminAccess(
         .json({ message: "You do not have permission for this operation" })
     if (
       ["GET", "HEAD"].includes(req.method) &&
-      !validateFieldSelection(resource, req.query.fields)
+      !validateFieldSelection(fieldResource, req.query.fields)
     ) {
       return res
         .status(403)

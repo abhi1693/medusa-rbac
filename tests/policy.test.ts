@@ -21,6 +21,19 @@ import { createPrincipal } from "./fixtures/access"
 import fieldInventory from "../src/lib/access/native-fields.json"
 
 const nativeRequire = createRequire(path.join(process.cwd(), "package.json"))
+const dashboardSource = (marker: string) => {
+  const directory = path.join(
+    path.dirname(nativeRequire.resolve("@medusajs/dashboard/package.json")),
+    "dist"
+  )
+  const file = readdirSync(directory)
+    .filter((file) => file.endsWith(".mjs"))
+    .find((file) =>
+      readFileSync(path.join(directory, file), "utf8").includes(marker)
+    )
+  assert.ok(file, `Inspect the pinned Dashboard source for ${marker}`)
+  return readFileSync(path.join(directory, file), "utf8")
+}
 
 const principal = createPrincipal({
   actor_id: "user_test",
@@ -171,22 +184,9 @@ test("cross-domain fields and wildcard selections are bounded", () => {
 })
 
 test("native product detail includes its reviewed shipping profile without expanding its relations", () => {
-  const dashboard = path.dirname(
-    nativeRequire.resolve("@medusajs/dashboard/package.json")
+  const source = dashboardSource(
+    "// src/routes/products/product-detail/constants.ts"
   )
-  const directory = path.join(dashboard, "dist")
-  const file = readdirSync(directory)
-    .filter((file) => file.endsWith(".mjs"))
-    .find((file) =>
-      readFileSync(path.join(directory, file), "utf8").includes(
-        "// src/routes/products/product-detail/constants.ts"
-      )
-    )
-  assert.ok(
-    file,
-    "Inspect the pinned native product detail fields after Dashboard upgrades"
-  )
-  const source = readFileSync(path.join(directory, file), "utf8")
   const fields = source.match(
     /PRODUCT_DETAIL_FIELDS = getLinkedFields\(\s*"product",\s*"([^"]+)"\s*\)/
   )?.[1]
@@ -213,6 +213,58 @@ test("native product detail includes its reviewed shipping profile without expan
       false,
       selection
     )
+})
+
+test("all native Product and Variant detail field requests match their returned entity", () => {
+  const productPage = dashboardSource(
+    "// src/routes/products/product-detail/product-detail.tsx"
+  )
+  const breadcrumb = productPage.match(
+    /var ProductDetailBreadcrumb =[\s\S]*?fields:\s*"([^"]+)"/
+  )?.[1]
+  assert.equal(
+    breadcrumb,
+    "-type,-collection,-options,-tags,-images,-variants,-sales_channels"
+  )
+  assert.equal(validateFieldSelection("products", breadcrumb), true)
+  const variantTable = productPage.match(
+    /var ProductVariantSection =[\s\S]*?fields:\s*"([^"]+)"/
+  )?.[1]
+  assert.equal(
+    variantTable,
+    "title,sku,thumbnail,*options,created_at,*inventory_items.inventory.location_levels,inventory_quantity,manage_inventory"
+  )
+  const variantDetailSource = dashboardSource(
+    "// src/routes/product-variants/product-variant-detail/constants.ts"
+  )
+  const variantDetail = variantDetailSource.match(
+    /VARIANT_DETAIL_FIELDS = "([^"]+)"/
+  )?.[1]
+  assert.equal(
+    variantDetail,
+    "*inventory_items,*inventory_items.inventory,*inventory_items.inventory.location_levels,*options,*options.option,*prices,*prices.price_rules,+images.id,+images.url,+images.variants.id"
+  )
+  for (const fields of [variantTable, variantDetail])
+    assert.equal(
+      validateFieldSelection("product-variants", fields),
+      true,
+      fields
+    )
+  for (const fields of [
+    "*inventory_items.*",
+    "*inventory_items.inventory.*",
+    "inventory_items.inventory.secret",
+    "inventory_items.inventory.location_levels.stock_locations",
+    "*prices.price_rules.price_set",
+    "images.variants.product.orders",
+    "*",
+  ])
+    assert.equal(
+      validateFieldSelection("product-variants", fields),
+      false,
+      fields
+    )
+  assert.equal(validateFieldSelection("products", "*inventory_items"), false)
 })
 
 test("nested and batch writes require their sensitive action grants", () => {
