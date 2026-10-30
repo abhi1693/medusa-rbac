@@ -65,7 +65,10 @@ const AccessManagement = () => {
       }}
       className="flex flex-col gap-y-3"
     >
-      <Tabs.List aria-label="Access management" className="flex h-auto w-full flex-wrap justify-start">
+      <Tabs.List
+        aria-label="Access management"
+        className="flex h-auto w-full flex-wrap justify-start"
+      >
         {views.map((view) => (
           <Tabs.Trigger key={view.id} value={view.id}>
             {view.label}
