@@ -229,6 +229,16 @@ const decision = explainPermission(principal, "documents.read", trustedContext)
 
 Provide an established principal, a registered permission and trusted context. Use the service's `allows` method or middleware for enforcement. `POST /admin/access/evaluate` exposes the Admin preview and requires an active native-user Superuser.
 
+## Admin previews
+
+Role details show grants, contextual rules and assigned accounts.
+
+![Role details with contextual permission rules and assigned accounts](docs/assets/role-details.png)
+
+The permission checker searches accounts within the selected type.
+
+![Customer account search in the permission checker](docs/assets/account-search.png)
+
 ## Storefront client
 
 Use your application's configured Medusa SDK, including its backend URL, publishable key and customer authentication:
