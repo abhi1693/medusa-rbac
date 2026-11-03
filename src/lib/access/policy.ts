@@ -70,14 +70,24 @@ export function validateFieldSelection(
     collections: ["products.id"],
     "customer-groups": ["customers.id"],
     // Dashboard 2.22.2 customer detail loads the native addresses relation.
-    customers: ["*addresses"],
+    customers: ["*addresses", "*groups"],
+    campaigns: ["promotions.id"],
+    "price-lists": [
+      "*prices",
+      "prices.price_set.variant.id",
+      "prices.price_rules.attribute",
+      "prices.price_rules.value",
+    ],
     // Order summary and timeline request these owning order-module relations.
     returns: ["*items", "*items.reason"],
     claims: ["*additional_items"],
     exchanges: ["*additional_items"],
     // Native settings and taxonomy detail components select these named links.
     regions: ["*payment_providers"],
-    "shipping-options": ["service_zone.fulfillment_set.type"],
+    "shipping-options": [
+      "service_zone.fulfillment_set.type",
+      "service_zone.fulfillment_set.location.id",
+    ],
     "product-categories": ["products.id"],
     "product-options": ["values.id", "values.value", "values.rank"],
     "stock-locations": [
@@ -96,6 +106,12 @@ export function validateFieldSelection(
     ],
     // Native Admin requests these computed order summaries explicitly.
     orders: [
+      "items.variant.product.shipping_profile.id",
+      "shipping_methods.shipping_option_id",
+      "items.variant.product.title",
+      "*items.variant.inventory",
+      "*items.variant.inventory.location_levels",
+      "*items.variant.inventory_items",
       "payment_status",
       "fulfillment_status",
       // The customer detail order table displays the shipping country.
@@ -118,6 +134,9 @@ export function validateFieldSelection(
       "region.automatic_taxes",
     ],
     products: [
+      "images.id",
+      "images.url",
+      "images.variants.id",
       "*categories",
       // Option detail lists the owning Product module join records.
       "*product_options",
@@ -139,6 +158,8 @@ export function validateFieldSelection(
       "stock_locations.name",
     ],
     "product-variants": [
+      "*product.images",
+      "*images",
       "inventory_quantity",
       "inventory_items.*",
       "inventory_items.inventory.id",

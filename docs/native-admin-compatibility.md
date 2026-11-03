@@ -71,3 +71,10 @@ not added.
 
 The shipping-option editor and service-zone areas form use the explicit
 fulfillment-set type and zone name fields with existing settings permissions.
+
+Native image assignment, variant media, campaign membership, price list
+editing, customer group assignment, and order allocation/fulfillment forms
+select the direct relations or named identifiers exercised by the pinned
+Dashboard. The existing product, customer, promotion, price, settings and
+inventory capabilities still apply. Nested customer, location, shipping
+profile and image expansions outside the reviewed selectors remain denied.

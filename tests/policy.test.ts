@@ -634,3 +634,32 @@ test("native order summaries and option tables allow direct owning-module relati
   ])
     assert.equal(validateFieldSelection(resource, fields), false, resource)
 })
+
+test("reviewed native modal projections stay bounded to their required relations", () => {
+  for (const [resource, fields] of [
+    [
+      "price-lists",
+      "*prices,prices.price_set.variant.id,prices.price_rules.attribute,prices.price_rules.value",
+    ],
+    ["product-variants", "*product.images,*images"],
+    ["campaigns", "+promotions.id"],
+    ["shipping-options", "+service_zone.fulfillment_set.location.id"],
+    ["customers", "*groups"],
+    ["products", "images.id,images.url,images.variants.id"],
+    [
+      "orders",
+      "+items.variant.product.shipping_profile.id,+shipping_methods.shipping_option_id,+items.variant.product.title,*items.variant.inventory,*items.variant.inventory.location_levels,*items.variant.inventory_items",
+    ],
+  ])
+    assert.equal(validateFieldSelection(resource, fields), true, resource)
+  for (const [resource, fields] of [
+    ["campaigns", "*promotions"],
+    ["customers", "*groups.customers"],
+    ["price-lists", "*prices.price_set.variant.product"],
+    ["product-variants", "*product.images.variants"],
+    ["products", "*images.variants.product"],
+    ["orders", "*items.variant.product.shipping_profile.shipping_options"],
+    ["shipping-options", "*service_zone.fulfillment_set.location.address"],
+  ])
+    assert.equal(validateFieldSelection(resource, fields), false, resource)
+})
