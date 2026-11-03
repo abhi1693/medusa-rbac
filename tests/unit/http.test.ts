@@ -902,3 +902,56 @@ it("resolves audit participants including deleted users and historical role/invi
   expect(rows[0].actor_label).toBe("actor@example.test")
   expect(rows[1].actor_label).toBe("Unknown user")
 })
+
+it.each(["GET", "HEAD"])(
+  "allows the native inventory detail selection with all read capabilities (%s)",
+  async (method) => {
+    const needed = [
+      "inventory.view",
+      "products.view",
+      "prices.view",
+      "stock_locations.view",
+    ]
+    const fields = "*variants,*variants.product,*variants.options"
+    const h = harness("/admin/inventory-items/iitem_test", method)
+    h.req.query.fields = fields
+    h.access.principal.mockResolvedValue({
+      ...principal,
+      is_superuser: false,
+      permissions: needed,
+    })
+    await h.run()
+    expect(h.next).toHaveBeenCalledWith()
+    expect(h.res.status).not.toHaveBeenCalled()
+    expect(h.req.query.fields).toBe(fields)
+    for (const missing of needed) {
+      const denied = harness("/admin/inventory-items/iitem_test", method)
+      denied.req.query.fields = fields
+      denied.access.principal.mockResolvedValue({
+        ...principal,
+        is_superuser: false,
+        permissions: needed.filter((permission) => permission !== missing),
+      })
+      await denied.run()
+      expect(denied.res.status).toHaveBeenCalledWith(403)
+      expect(denied.next).not.toHaveBeenCalled()
+    }
+  }
+)
+
+it.each([
+  "*",
+  "*variants.prices",
+  "*variants.product.orders",
+  "*variants.product.product_specification",
+  "*variants.options.option",
+])("keeps unreviewed inventory relations denied: %s", async (fields) => {
+  const h = harness("/admin/inventory-items/iitem_test")
+  h.req.query.fields = fields
+  await h.run()
+  expect(h.res.status).toHaveBeenCalledWith(403)
+  expect(h.res.json).toHaveBeenCalledWith({
+    message: "This field selection is not allowed",
+  })
+  expect(h.next).not.toHaveBeenCalled()
+})

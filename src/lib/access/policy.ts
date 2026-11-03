@@ -70,6 +70,9 @@ export function validateFieldSelection(
       "variants.inventory_items.inventory.location_levels",
       "variants.inventory_items.required_quantity",
     ],
+    // Dashboard 2.22.2 inventory-detail/constants.ts requests these linked data.
+    // Inventory reads already require product, price and stock-location access.
+    "inventory-items": ["*variants", "*variants.product", "*variants.options"],
     "product-variants": [
       "inventory_quantity",
       // Reviewed native Variant table/detail expansions. Inventory grants are

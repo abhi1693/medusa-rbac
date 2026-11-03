@@ -467,3 +467,31 @@ test("native Admin list queries remain within reviewed field bounds", () => {
   ])
     assert.equal(validateFieldSelection(resource, fields), false)
 })
+
+test("native inventory detail fields match the reviewed Dashboard selection", () => {
+  const base = path.dirname(
+    nativeRequire.resolve("@medusajs/dashboard/package.json")
+  )
+  const source = readFileSync(
+    path.join(base, "src/routes/inventory/inventory-detail/constants.ts"),
+    "utf8"
+  )
+  const fields = source.match(/"(\*variants[^"\n]+)"/)?.[1]
+  assert.equal(fields, "*variants,*variants.product,*variants.options")
+  assert.equal(validateFieldSelection("inventory-items", fields), true)
+  assert.equal(
+    validateFieldSelection(
+      "inventory-items",
+      "+variants,+variants.product,-variants.options"
+    ),
+    true
+  )
+  for (const fields of [
+    "*",
+    "*variants.prices",
+    "*variants.product.orders",
+    "*variants.product.product_specification",
+    "*variants.options.option",
+  ])
+    assert.equal(validateFieldSelection("inventory-items", fields), false)
+})
