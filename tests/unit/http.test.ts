@@ -1103,3 +1103,16 @@ it("normalizes only the authorized native sales-channel hydration query", async 
     else expect(h.req.query).toEqual(query)
   }
 })
+
+it("does not add a fields key to strict native or custom read queries", async () => {
+  for (const path of [
+    "/admin/access/roles",
+    "/admin/promotions/rule-value-options/rules/sales_channel",
+  ]) {
+    const h = harness(path)
+    h.req.query = {}
+    await h.run()
+    expect(h.next).toHaveBeenCalledWith()
+    expect(Object.hasOwn(h.req.query, "fields")).toBe(false)
+  }
+})

@@ -66,10 +66,11 @@ export async function enforceAdminAccess(
         req.query.value = ruleValue
         delete req.query.id
       }
-      req.query.fields = nativeFieldSelection(
+      const fields = nativeFieldSelection(
         descriptor.fieldResource,
         req.query.fields
       )
+      if (fields !== req.query.fields) req.query.fields = fields
       if (
         !validateFieldSelection(
           descriptor.fieldResource,
