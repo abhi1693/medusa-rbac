@@ -21,6 +21,7 @@ function harness(type = "user") {
     configuration: createAccessConfig(),
     principal: vi.fn().mockResolvedValue(createPrincipal()),
     policyFor: createAccessConfig().policyFor,
+    resolveRequest: createAccessConfig().resolveRequest,
     permissionContext: async () => ({}),
     allows: evaluatePermission,
   }

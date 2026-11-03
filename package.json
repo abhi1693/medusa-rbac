@@ -45,6 +45,10 @@
     },
     "./.medusa/server/src/modules/*": "./.medusa/server/src/modules/*/index.js",
     "./config": "./.medusa/server/src/lib/access/config.js",
+    "./resources": {
+      "types": "./.medusa/server/src/resources.d.ts",
+      "default": "./.medusa/server/src/resources.js"
+    },
     "./require-permission": "./.medusa/server/src/lib/access/middleware.js",
     "./workflows": "./.medusa/server/src/workflows/index.js",
     "./client": {

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict"
 import { test } from "vitest"
+import type { MedusaRequest } from "@medusajs/framework/http"
+import { createAccessConfig } from "../src/lib/access/config"
 import { createRequire } from "node:module"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
 import {
   additionalWritePermissions,
@@ -21,6 +23,19 @@ import { createPrincipal } from "./fixtures/access"
 import fieldInventory from "../src/lib/access/native-fields.json"
 
 const nativeRequire = createRequire(path.join(process.cwd(), "package.json"))
+const dashboardSource = (marker: string) => {
+  const directory = path.join(
+    path.dirname(nativeRequire.resolve("@medusajs/dashboard/package.json")),
+    "dist"
+  )
+  const file = readdirSync(directory)
+    .filter((file) => file.endsWith(".mjs"))
+    .find((file) =>
+      readFileSync(path.join(directory, file), "utf8").includes(marker)
+    )
+  assert.ok(file, `Inspect the pinned Dashboard source for ${marker}`)
+  return readFileSync(path.join(directory, file), "utf8")
+}
 
 const principal = createPrincipal({
   actor_id: "user_test",
@@ -109,6 +124,75 @@ test("native user management requires an active Superuser", () => {
     assert.equal(policyFor(method, path), null, `${method} ${path}`)
 })
 
+test("layout policy matches pinned native scopes and bounded list fields", async () => {
+  const scopedPermissions = async (body: unknown) =>
+    (
+      await createAccessConfig().resolveRequest({
+        method: "POST",
+        originalUrl: "/admin/layouts/product.details/configuration",
+        body,
+      } as MedusaRequest)
+    )?.policy.permissions ?? null
+  const { AdminSetLayoutConfiguration } = nativeRequire(
+    "@medusajs/medusa/api/admin/layouts/[zone]/configuration/validators"
+  )
+  const { defaultLayoutConfigurationFields } = nativeRequire(
+    "@medusajs/medusa/api/admin/layouts/configurations/query-config"
+  )
+  const personal = { configuration: { widgets: {} } }
+  assert.equal(AdminSetLayoutConfiguration.parse(personal).is_default, false)
+  for (const is_default of [false, true]) {
+    const body = { ...personal, is_default }
+    assert.equal(AdminSetLayoutConfiguration.parse(body).is_default, is_default)
+    assert.deepEqual(
+      await scopedPermissions(body),
+      is_default ? ["settings.manage"] : []
+    )
+  }
+  assert.deepEqual(await scopedPermissions(personal), [])
+  for (const is_default of ["false", "true", 0, 1, null, [], {}]) {
+    const body = { ...personal, is_default }
+    assert.throws(() => AdminSetLayoutConfiguration.parse(body))
+    assert.equal(await scopedPermissions(body), null)
+  }
+  assert.equal(
+    validateFieldSelection(
+      "layouts",
+      defaultLayoutConfigurationFields.join(",")
+    ),
+    true
+  )
+  for (const fields of [
+    "*",
+    "user.email",
+    "*user",
+    "configuration.secret",
+    "-unreviewed",
+  ])
+    assert.equal(validateFieldSelection("layouts", fields), false)
+  for (const [method, path] of [
+    ["GET", "/admin/layouts/configurations"],
+    ["GET", "/admin/layouts/product.details/configuration"],
+    ["POST", "/admin/layouts/product.details/configuration"],
+    ["DELETE", "/admin/layouts/product.details/configuration"],
+  ]) {
+    assert.equal(
+      inventory.some(
+        (route) =>
+          route.methods.includes(method) &&
+          (route.path === path ||
+            route.path === "/admin/layouts/:zone/configuration")
+      ),
+      true
+    )
+    assert.deepEqual(policyFor(method, path), { permissions: [] })
+    assert.equal(
+      can({ ...principal, active: false }, policyFor(method, path)!),
+      false
+    )
+  }
+})
+
 test("normalization cannot turn a denied request into an alternate operation", () => {
   assert.equal(normalizedPath("/ADMIN/products/?fields=id"), "/admin/products")
   for (const route of [
@@ -168,6 +252,90 @@ test("cross-domain fields and wildcard selections are bounded", () => {
     "+rbac_roles",
   ])
     assert.equal(validateFieldSelection("products", fields), false)
+})
+
+test("native product detail includes its reviewed shipping profile without expanding its relations", () => {
+  const source = dashboardSource(
+    "// src/routes/products/product-detail/constants.ts"
+  )
+  const fields = source.match(
+    /PRODUCT_DETAIL_FIELDS = getLinkedFields\(\s*"product",\s*"([^"]+)"\s*\)/
+  )?.[1]
+  assert.equal(fields, "*categories,*shipping_profile,-variants")
+  assert.equal(validateFieldSelection("products", fields), true)
+  for (const selection of [
+    "shipping_profile",
+    "-shipping_profile,-variants",
+    "+shipping_profile,-type",
+  ])
+    assert.equal(validateFieldSelection("products", selection), true, selection)
+  for (const selection of [
+    "*shipping_profile.shipping_options",
+    "shipping_profile.secret",
+    "shipping_profile.*",
+    "*shipping_profile.*",
+    "-shipping_profile.secret",
+    "*unreviewed_relation",
+    "-unreviewed_relation",
+    "*",
+  ])
+    assert.equal(
+      validateFieldSelection("products", selection),
+      false,
+      selection
+    )
+})
+
+test("all native Product and Variant detail field requests match their returned entity", () => {
+  const productPage = dashboardSource(
+    "// src/routes/products/product-detail/product-detail.tsx"
+  )
+  const breadcrumb = productPage.match(
+    /var ProductDetailBreadcrumb =[\s\S]*?fields:\s*"([^"]+)"/
+  )?.[1]
+  assert.equal(
+    breadcrumb,
+    "-type,-collection,-options,-tags,-images,-variants,-sales_channels"
+  )
+  assert.equal(validateFieldSelection("products", breadcrumb), true)
+  const variantTable = productPage.match(
+    /var ProductVariantSection =[\s\S]*?fields:\s*"([^"]+)"/
+  )?.[1]
+  assert.equal(
+    variantTable,
+    "title,sku,thumbnail,*options,created_at,*inventory_items.inventory.location_levels,inventory_quantity,manage_inventory"
+  )
+  const variantDetailSource = dashboardSource(
+    "// src/routes/product-variants/product-variant-detail/constants.ts"
+  )
+  const variantDetail = variantDetailSource.match(
+    /VARIANT_DETAIL_FIELDS = "([^"]+)"/
+  )?.[1]
+  assert.equal(
+    variantDetail,
+    "*inventory_items,*inventory_items.inventory,*inventory_items.inventory.location_levels,*options,*options.option,*prices,*prices.price_rules,+images.id,+images.url,+images.variants.id"
+  )
+  for (const fields of [variantTable, variantDetail])
+    assert.equal(
+      validateFieldSelection("product-variants", fields),
+      true,
+      fields
+    )
+  for (const fields of [
+    "*inventory_items.*",
+    "*inventory_items.inventory.*",
+    "inventory_items.inventory.secret",
+    "inventory_items.inventory.location_levels.stock_locations",
+    "*prices.price_rules.price_set",
+    "images.variants.product.orders",
+    "*",
+  ])
+    assert.equal(
+      validateFieldSelection("product-variants", fields),
+      false,
+      fields
+    )
+  assert.equal(validateFieldSelection("products", "*inventory_items"), false)
 })
 
 test("nested and batch writes require their sensitive action grants", () => {
@@ -298,4 +466,200 @@ test("native Admin list queries remain within reviewed field bounds", () => {
     ["orders", "customer.auth_identity"],
   ])
     assert.equal(validateFieldSelection(resource, fields), false)
+})
+
+test("native inventory detail fields match the reviewed Dashboard selection", () => {
+  const base = path.dirname(
+    nativeRequire.resolve("@medusajs/dashboard/package.json")
+  )
+  const source = readFileSync(
+    path.join(base, "src/routes/inventory/inventory-detail/constants.ts"),
+    "utf8"
+  )
+  const fields = source.match(/"(\*variants[^"\n]+)"/)?.[1]
+  assert.equal(fields, "*variants,*variants.product,*variants.options")
+  assert.equal(validateFieldSelection("inventory-items", fields), true)
+  assert.equal(
+    validateFieldSelection(
+      "inventory-items",
+      "+variants,+variants.product,-variants.options"
+    ),
+    true
+  )
+  for (const fields of [
+    "*",
+    "*variants.prices",
+    "*variants.product.orders",
+    "*variants.product.product_specification",
+    "*variants.options.option",
+  ])
+    assert.equal(validateFieldSelection("inventory-items", fields), false)
+})
+
+test("native inventory location table selects only reviewed location identifiers and names", () => {
+  const base = path.dirname(
+    nativeRequire.resolve("@medusajs/dashboard/package.json")
+  )
+  const source = readFileSync(
+    path.join(
+      base,
+      "src/routes/inventory/inventory-detail/components/location-levels-table/location-list-table.tsx"
+    ),
+    "utf8"
+  )
+  const fields = source.match(/fields:\s*"([^"]+)"/)?.[1]
+  assert.equal(fields, "+stock_locations.id,+stock_locations.name")
+  assert.equal(validateFieldSelection("inventory-items", fields), true)
+  for (const fields of [
+    "*stock_locations",
+    "stock_locations.address",
+    "stock_locations.metadata",
+    "stock_locations.orders",
+  ])
+    assert.equal(validateFieldSelection("inventory-items", fields), false)
+})
+
+test("native customer detail selects only the reviewed addresses relation", () => {
+  const base = path.dirname(
+    nativeRequire.resolve("@medusajs/dashboard/package.json")
+  )
+  for (const file of ["loader.ts", "customer-detail.tsx"]) {
+    const source = readFileSync(
+      path.join(base, "src/routes/customers/customer-detail", file),
+      "utf8"
+    )
+    const fields = source.match(/fields:\s*"([^"]+)"/)?.[1]
+    assert.equal(fields, "+*addresses")
+    assert.equal(validateFieldSelection("customers", fields), true)
+  }
+  for (const fields of [
+    "*",
+    "*addresses.customer",
+    "*orders",
+    "*auth_identity",
+  ])
+    assert.equal(validateFieldSelection("customers", fields), false)
+})
+
+test("the native customer order table selects a bounded shipping field", () => {
+  const base = path.dirname(
+    nativeRequire.resolve("@medusajs/dashboard/package.json")
+  )
+  const source = readFileSync(
+    path.join(
+      base,
+      "src/routes/customers/customer-detail/components/customer-order-section/customer-order-section.tsx"
+    ),
+    "utf8"
+  )
+  const fields = ["DEFAULT_FIELDS", "DEFAULT_RELATIONS"].map(
+    (key) =>
+      source.match(new RegExp("const " + key + '\\s*=\\s*"([^"]+)"'))?.[1]
+  )
+  assert.ok(fields.every(Boolean))
+  assert.equal(validateFieldSelection("orders", fields.join(",")), true)
+  for (const field of [
+    "+shipping_address.metadata",
+    "+shipping_address.customer",
+  ])
+    assert.equal(validateFieldSelection("orders", field), false)
+})
+
+test("reviewed native list and detail selections preserve field boundaries", () => {
+  for (const [resource, fields] of [
+    ["regions", "*payment_providers"],
+    [
+      "stock-locations",
+      "*sales_channels, *address, *fulfillment_sets, *fulfillment_sets.service_zones, *fulfillment_sets.service_zones.shipping_options, *fulfillment_sets.service_zones.shipping_options.shipping_profile, fulfillment_sets.type, fulfillment_sets.name, *fulfillment_sets.service_zones.geo_zones, *fulfillment_sets.service_zones.shipping_options.rules, *fulfillment_providers",
+    ],
+    ["product-options", "-products, values.id, values.value, values.rank"],
+    [
+      "orders",
+      "item_discount_total, discount_subtotal, shipping_discount_total, refundable_total, order_change, *items.variant.options, +items.variant.manage_inventory, *items.variant.inventory_items.inventory, +items.variant.inventory_items.required_quantity, *promotions, +fulfillments.shipping_option.service_zone.fulfillment_set.type, *fulfillments.items, *fulfillments.labels, *payment_collections.payment_sessions, *payment_collections.payments.refunds.refund_reason, region.automatic_taxes",
+    ],
+    [
+      "product-variants",
+      "inventory_items.*, inventory_items.inventory.id, inventory_items.inventory.title, inventory_items.inventory.sku",
+    ],
+    ["product-categories", "products.id"],
+  ])
+    assert.equal(validateFieldSelection(resource, fields), true, resource)
+  for (const [resource, fields] of [
+    ["product-options", "+products"],
+    ["product-options", "-products.metadata"],
+    ["product-options", "*products"],
+    [
+      "stock-locations",
+      "*fulfillment_sets.service_zones.shipping_options.provider",
+    ],
+    ["regions", "*payment_providers.credentials"],
+    ["orders", "*payment_collections.payment_sessions.payment"],
+    ["orders", "*items.variant.product.product_specification"],
+    [
+      "product-variants",
+      "*inventory_items.inventory.location_levels.stock_locations",
+    ],
+    ["product-categories", "*products"],
+  ])
+    assert.equal(validateFieldSelection(resource, fields), false)
+  assert.equal(
+    validateFieldSelection("product-options", "-products", []),
+    false
+  )
+})
+
+test("native order summaries and option tables allow direct owning-module relations", () => {
+  for (const [resource, fields] of [
+    ["returns", "*items,*items.reason"],
+    ["returns", "+received_at,*items"],
+    ["shipping-options", "+service_zone.fulfillment_set.type"],
+    [
+      "stock-locations",
+      "*fulfillment_sets.service_zones.geo_zones,fulfillment_sets.service_zones.name",
+    ],
+
+    ["claims", "*additional_items"],
+    ["exchanges", "*additional_items"],
+    [
+      "products",
+      "id,title,handle,thumbnail,status,*collection,*sales_channels,*product_options,variants.id",
+    ],
+  ])
+    assert.equal(validateFieldSelection(resource, fields), true, resource)
+  for (const [resource, fields] of [
+    ["returns", "*items.reason.parent_return_reason"],
+    ["claims", "*additional_items.variant"],
+    ["exchanges", "*additional_items.variant.product"],
+    ["products", "*product_options.option.values"],
+  ])
+    assert.equal(validateFieldSelection(resource, fields), false, resource)
+})
+
+test("reviewed native modal projections stay bounded to their required relations", () => {
+  for (const [resource, fields] of [
+    [
+      "price-lists",
+      "*prices,prices.price_set.variant.id,prices.price_rules.attribute,prices.price_rules.value",
+    ],
+    ["product-variants", "*product.images,*images"],
+    ["campaigns", "+promotions.id"],
+    ["shipping-options", "+service_zone.fulfillment_set.location.id"],
+    ["customers", "*groups"],
+    ["products", "images.id,images.url,images.variants.id"],
+    [
+      "orders",
+      "+items.variant.product.shipping_profile.id,+shipping_methods.shipping_option_id,+items.variant.product.title,*items.variant.inventory,*items.variant.inventory.location_levels,*items.variant.inventory_items",
+    ],
+  ])
+    assert.equal(validateFieldSelection(resource, fields), true, resource)
+  for (const [resource, fields] of [
+    ["campaigns", "*promotions"],
+    ["customers", "*groups.customers"],
+    ["price-lists", "*prices.price_set.variant.product"],
+    ["product-variants", "*product.images.variants"],
+    ["products", "*images.variants.product"],
+    ["orders", "*items.variant.product.shipping_profile.shipping_options"],
+    ["shipping-options", "*service_zone.fulfillment_set.location.address"],
+  ])
+    assert.equal(validateFieldSelection(resource, fields), false, resource)
 })

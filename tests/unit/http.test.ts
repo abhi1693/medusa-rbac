@@ -16,13 +16,49 @@ import * as person from "../../src/api/admin/access/staff/[id]/route"
 import * as audit from "../../src/api/admin/access/audit/route"
 import * as permissions from "../../src/api/admin/access/permissions/route"
 import middlewares from "../../src/api/middlewares"
+import {
+  crudProfile,
+  defineResource,
+  type ProfileAction,
+} from "../../src/resources"
 
 import { createPrincipal } from "../fixtures/access"
 const principal = createPrincipal({ actor_id: "u" })
+const selfProfileResource = (
+  actorTypes = ["user"],
+  payload?: ProfileAction["payload"]
+) =>
+  defineResource({
+    key: "profiles",
+    root: "profiles",
+    actorTypes,
+    profile: {
+      item: {
+        parameter: "id",
+        profile: {
+          actions: {
+            POST: {
+              operation: "update",
+              payload,
+              self: {
+                parameter: "id",
+                fields: ["first_name"],
+                responseFields: ["id", "first_name"],
+              },
+            },
+          },
+        },
+      },
+    },
+    operations: {
+      update: { permissions: ["products.edit"], access: "authenticated" },
+    },
+  })
 function harness(path = "/admin/products", method = "GET", body: unknown = {}) {
   const access = {
     configuration: createAccessConfig(),
     policyFor: createAccessConfig().policyFor,
+    resolveRequest: createAccessConfig().resolveRequest,
     permissionContext: async () => ({}),
     allows: evaluatePermission,
     permissionDefinitions: () => createAccessConfig().permissions,
@@ -115,10 +151,136 @@ it("passes native user errors to Medusa and refuses deleted identities", async (
 })
 it("allows only own safe profile fields without role assignments", async () => {
   const h = harness("/admin/users/u", "POST", { first_name: "Name" })
+  h.access.principal.mockResolvedValue({
+    ...principal,
+    active: false,
+    is_superuser: false,
+    permissions: [],
+  })
   await h.run()
   expect(h.next).toHaveBeenCalledWith()
   expect(h.req.query.fields).toBe("id,email,first_name,last_name,avatar_url")
-  expect(h.access.principal).not.toHaveBeenCalled()
+  expect(h.access.principal).toHaveBeenCalledWith("u")
+})
+it("uses a computed self match rather than trusting a declared self rule", async () => {
+  const configuration = createAccessConfig({
+    resources: [selfProfileResource()],
+  })
+  const own = harness("/admin/profiles/u", "POST", { first_name: "Name" })
+  own.access.resolveRequest = configuration.resolveRequest
+  await own.run()
+  expect(own.next).toHaveBeenCalledWith()
+  expect(own.access.principal).toHaveBeenCalledWith("u")
+  expect(own.req.query.fields).toBe("id,first_name")
+  for (const [id, body] of [
+    ["Other", { first_name: "Name" }],
+    ["U", { first_name: "Name" }],
+    ["u", { first_name: "Name", role_ids: [] }],
+  ] as const) {
+    const denied = harness(`/admin/profiles/${id}`, "POST", body)
+    denied.access.resolveRequest = configuration.resolveRequest
+    denied.access.principal.mockResolvedValue({
+      ...principal,
+      is_superuser: false,
+      permissions: [],
+    })
+    await denied.run()
+    expect(denied.res.status).toHaveBeenCalledWith(403)
+    expect(denied.next).not.toHaveBeenCalled()
+    expect(denied.req.query.fields).toBeUndefined()
+  }
+})
+it.each(["customer", "vendor"])(
+  "does not turn an own-ID match into authority for a %s-only resource",
+  async (actorType) => {
+    const configuration = createAccessConfig({
+      resources: [selfProfileResource([actorType])],
+    })
+    const h = harness("/admin/profiles/u", "POST", { first_name: "Name" })
+    h.access.resolveRequest = configuration.resolveRequest
+    expect((await configuration.resolveRequest(h.req))?.self).toBe(true)
+    await h.run()
+    expect(h.res.status).toHaveBeenCalledWith(403)
+    expect(h.next).not.toHaveBeenCalled()
+    expect(h.req.query.fields).toBeUndefined()
+  }
+)
+it("enforces resolved payload requirements before applying a self-profile projection", async () => {
+  const configuration = createAccessConfig({
+    resources: [selfProfileResource(["user"], async () => ["prices.edit"])],
+  })
+  for (const [active, permissions, allowed] of [
+    [true, [], false],
+    [false, ["prices.edit"], false],
+    [true, ["prices.edit"], true],
+  ] as const) {
+    const h = harness("/admin/profiles/u", "POST", { first_name: "Name" })
+    h.access.resolveRequest = configuration.resolveRequest
+    h.access.principal.mockResolvedValue({
+      ...principal,
+      active,
+      is_superuser: false,
+      permissions: [...permissions],
+    })
+    await h.run()
+    expect(h.access.principal).toHaveBeenCalledWith("u")
+    if (allowed) {
+      expect(h.next).toHaveBeenCalledWith()
+      expect(h.req.query.fields).toBe("id,first_name")
+      expect(h.res.status).not.toHaveBeenCalled()
+    } else {
+      expect(h.res.status).toHaveBeenCalledWith(403)
+      expect(h.next).not.toHaveBeenCalled()
+      expect(h.req.query.fields).toBeUndefined()
+    }
+  }
+})
+it("enforces registered fields, capabilities and unknown-command denial for another resource", async () => {
+  const configuration = createAccessConfig({
+    resources: [
+      defineResource({
+        key: "documents",
+        root: "documents",
+        actorTypes: ["user"],
+        profile: crudProfile(),
+        operations: {
+          read: { permissions: ["products.view"] },
+          create: { permissions: ["products.create"] },
+          update: { permissions: ["products.edit"] },
+          delete: { permissions: ["products.delete"] },
+        },
+        fields: ["id", "inventory_quantity"],
+        fieldRequirements: [
+          { pattern: /inventory/, permissions: ["inventory.view"] },
+        ],
+      }),
+    ],
+  })
+  for (const [fields, allowed] of [
+    ["id", true],
+    ["inventory_quantity", false],
+    ["*auth", false],
+  ] as const) {
+    const h = harness("/admin/documents")
+    h.access.resolveRequest = configuration.resolveRequest
+    h.req.query.fields = fields
+    h.access.principal.mockResolvedValue({
+      ...principal,
+      is_superuser: false,
+      permissions: ["products.view"],
+    })
+    await h.run()
+    if (allowed) expect(h.next).toHaveBeenCalledWith()
+    else {
+      expect(h.res.status).toHaveBeenCalledWith(403)
+      expect(h.next).not.toHaveBeenCalled()
+    }
+  }
+  const unknown = harness("/admin/documents/Document_A/unregistered", "POST")
+  unknown.access.resolveRequest = configuration.resolveRequest
+  await unknown.run()
+  expect(unknown.res.status).toHaveBeenCalledWith(403)
+  expect(unknown.next).not.toHaveBeenCalled()
 })
 it.each([
   ["/admin/users/User_Target", "User_Target"],
@@ -196,11 +358,160 @@ it("denies inactive business access and unknown operations", async () => {
   await denied.run()
   expect(denied.res.status).toHaveBeenCalledWith(403)
 })
+it("allows active staff personal layouts and gates shared saves with contextual settings access", async () => {
+  const ordinary = { ...principal, is_superuser: false, permissions: [] }
+  for (const [method, path, body] of [
+    ["GET", "/admin/layouts/configurations", {}],
+    ["HEAD", "/admin/layouts/product.details/configuration", {}],
+    ["GET", "/admin/layouts/product.details/configuration", {}],
+    ["DELETE", "/admin/layouts/product.details/configuration", {}],
+    ["POST", "/admin/layouts/product.details/configuration", {}],
+    [
+      "POST",
+      "/admin/layouts/product.details/configuration",
+      { is_default: false },
+    ],
+  ] as const) {
+    const h = harness(path, method, body)
+    h.access.principal.mockResolvedValue(ordinary)
+    await h.run()
+    expect(h.next, `${method} ${path}`).toHaveBeenCalledWith()
+  }
+  const denied = harness(
+    "/admin/layouts/product.details/configuration",
+    "POST",
+    {
+      is_default: true,
+    }
+  )
+  denied.access.principal.mockResolvedValue(ordinary)
+  await denied.run()
+  expect(denied.res.status).toHaveBeenCalledWith(403)
+  expect(denied.next).not.toHaveBeenCalled()
+  const allowed = harness(
+    "/admin/layouts/product.details/configuration",
+    "POST",
+    {
+      is_default: true,
+    }
+  )
+  allowed.access.principal.mockResolvedValue({
+    ...ordinary,
+    permissions: ["settings.manage"],
+  })
+  await allowed.run()
+  expect(allowed.next).toHaveBeenCalledWith()
+  const contextDenied = harness(
+    "/admin/layouts/product.details/configuration",
+    "POST",
+    {
+      is_default: true,
+    }
+  )
+  contextDenied.access.principal.mockResolvedValue({
+    ...ordinary,
+    permissions: ["settings.manage"],
+    rules: [{ permission: "settings.manage", effect: "deny", conditions: {} }],
+  })
+  await contextDenied.run()
+  expect(contextDenied.res.status).toHaveBeenCalledWith(403)
+})
+it("keeps layout scope validation, inactive users, unknown routes and field expansion fail closed", async () => {
+  for (const body of [
+    null,
+    [],
+    "body",
+    1,
+    ...["false", "true", 0, 1, null, [], {}].map((is_default) => ({
+      is_default,
+    })),
+  ]) {
+    const h = harness(
+      "/admin/layouts/product.details/configuration",
+      "POST",
+      body
+    )
+    await h.run()
+    expect(h.res.status, JSON.stringify(body)).toHaveBeenCalledWith(403)
+    expect(h.next).not.toHaveBeenCalled()
+  }
+  for (const [path, method] of [
+    ["/admin/layouts/product.details/configuration", "GET"],
+    ["/admin/layouts/product.details/configuration", "POST"],
+    ["/admin/layouts/product.details/configuration", "DELETE"],
+  ]) {
+    const h = harness(path, method)
+    h.access.principal.mockResolvedValue({ ...principal, active: false })
+    await h.run()
+    expect(h.res.status).toHaveBeenCalledWith(403)
+  }
+  for (const [path, method] of [
+    ["/admin/layouts", "GET"],
+    ["/admin/layouts/configurations", "POST"],
+    ["/admin/layouts/product.details/configuration", "PUT"],
+    ["/admin/layouts/product.details/configuration/shared", "POST"],
+  ]) {
+    const h = harness(path, method)
+    await h.run()
+    expect(h.res.status).toHaveBeenCalledWith(403)
+  }
+  const selected = harness("/admin/layouts/configurations")
+  selected.req.query.fields = "id,configuration,user_id"
+  await selected.run()
+  expect(selected.next).toHaveBeenCalledWith()
+  const expanded = harness("/admin/layouts/configurations")
+  expanded.req.query.fields = "*user.auth_identity"
+  await expanded.run()
+  expect(expanded.res.status).toHaveBeenCalledWith(403)
+})
 it.each(["GET", "HEAD"])("bounds read field selection (%s)", async (method) => {
   const h = harness("/admin/products", method)
   h.req.query.fields = "*"
   await h.run()
   expect(h.res.status).toHaveBeenCalledWith(403)
+})
+it.each(["GET", "HEAD"])(
+  "allows the native Superuser product detail selection (%s)",
+  async (method) => {
+    const h = harness("/admin/products/prod_native", method)
+    h.req.query.fields = "*categories,*shipping_profile,-variants"
+    await h.run()
+    expect(h.next).toHaveBeenCalledWith()
+    expect(h.res.status).not.toHaveBeenCalled()
+  }
+)
+it("retains product permissions and bounded relations for native product detail reads", async () => {
+  const authorized = harness("/admin/products/prod_native")
+  authorized.req.query.fields = "*categories,*shipping_profile,-variants"
+  authorized.access.principal.mockResolvedValue(
+    createPrincipal({
+      is_superuser: false,
+      permissions: ["products.view", "prices.view"],
+    })
+  )
+  await authorized.run()
+  expect(authorized.next).toHaveBeenCalledWith()
+  const denied = harness("/admin/products/prod_native")
+  denied.req.query.fields = "*categories,*shipping_profile,-variants"
+  denied.access.principal.mockResolvedValue(
+    createPrincipal({ is_superuser: false, permissions: ["products.view"] })
+  )
+  await denied.run()
+  expect(denied.res.status).toHaveBeenCalledWith(403)
+  for (const fields of [
+    "*shipping_profile.shipping_options",
+    "*unreviewed_relation",
+    "*",
+  ]) {
+    const superuser = harness("/admin/products/prod_native")
+    superuser.req.query.fields = fields
+    await superuser.run()
+    expect(superuser.res.status).toHaveBeenCalledWith(403)
+    expect(superuser.res.json).toHaveBeenCalledWith({
+      message: "This field selection is not allowed",
+    })
+    expect(superuser.next).not.toHaveBeenCalled()
+  }
 })
 it("requires inventory permission for reviewed inventory expansions", async () => {
   const h = harness()
@@ -216,6 +527,76 @@ it("requires inventory permission for reviewed inventory expansions", async () =
   ok.req.query.fields = "variants.inventory_quantity"
   await ok.run()
   expect(ok.next).toHaveBeenCalledWith()
+})
+it.each([
+  [
+    "GET",
+    "/admin/products/prod_native/variants",
+    "title,sku,thumbnail,*options,created_at,*inventory_items.inventory.location_levels,inventory_quantity,manage_inventory",
+  ],
+  [
+    "HEAD",
+    "/admin/products/prod_native/variants/variant_native",
+    "*inventory_items,*inventory_items.inventory,*inventory_items.inventory.location_levels,*options,*options.option,*prices,*prices.price_rules,+images.id,+images.url,+images.variants.id",
+  ],
+])(
+  "allows the reviewed native Variant read with inventory grants (%s %s)",
+  async (method, path, fields) => {
+    const superuser = harness(path, method)
+    superuser.req.query.fields = fields
+    await superuser.run()
+    expect(superuser.next).toHaveBeenCalledWith()
+    const authorized = harness(path, method)
+    authorized.req.query.fields = fields
+    authorized.access.principal.mockResolvedValue(
+      createPrincipal({
+        is_superuser: false,
+        permissions: ["products.view", "prices.view", "inventory.view"],
+      })
+    )
+    await authorized.run()
+    expect(authorized.next).toHaveBeenCalledWith()
+    const denied = harness(path, method)
+    denied.req.query.fields = fields
+    denied.access.principal.mockResolvedValue(
+      createPrincipal({
+        is_superuser: false,
+        permissions: ["products.view", "prices.view"],
+      })
+    )
+    await denied.run()
+    expect(denied.res.status).toHaveBeenCalledWith(403)
+    expect(denied.res.json).toHaveBeenCalledWith({
+      message: "Additional permissions are required for these fields",
+    })
+  }
+)
+it("rejects unreviewed Variant subrelations and does not grant Variant-only fields on Products", async () => {
+  for (const [path, fields] of [
+    [
+      "/admin/products/prod_native/variants",
+      "*inventory_items.inventory.secret",
+    ],
+    [
+      "/admin/products/prod_native/variants/variant_native",
+      "*inventory_items.*",
+    ],
+    [
+      "/admin/products/prod_native/variants/variant_native",
+      "*prices.price_rules.price_set",
+    ],
+    ["/admin/products/prod_native/variants/variant_native", "*"],
+    ["/admin/products/prod_native", "*inventory_items"],
+  ]) {
+    const h = harness(path)
+    h.req.query.fields = fields
+    await h.run()
+    expect(h.res.status).toHaveBeenCalledWith(403)
+    expect(h.res.json).toHaveBeenCalledWith({
+      message: "This field selection is not allowed",
+    })
+    expect(h.next).not.toHaveBeenCalled()
+  }
 })
 it.each([
   ["POST", "/admin/products", { status: "published" }],
@@ -520,4 +901,218 @@ it("resolves audit participants including deleted users and historical role/invi
   )
   expect(rows[0].actor_label).toBe("actor@example.test")
   expect(rows[1].actor_label).toBe("Unknown user")
+})
+
+it.each(["GET", "HEAD"])(
+  "allows native inventory detail and location selections with all read capabilities (%s)",
+  async (method) => {
+    const needed = [
+      "inventory.view",
+      "products.view",
+      "prices.view",
+      "stock_locations.view",
+    ]
+    for (const [path, fields] of [
+      [
+        "/admin/inventory-items/iitem_test",
+        "*variants,*variants.product,*variants.options",
+      ],
+      [
+        "/admin/inventory-items/iitem_test/location-levels",
+        "+stock_locations.id,+stock_locations.name",
+      ],
+    ]) {
+      const h = harness(path, method)
+      h.req.query.fields = fields
+      h.access.principal.mockResolvedValue({
+        ...principal,
+        is_superuser: false,
+        permissions: needed,
+      })
+      await h.run()
+      expect(h.next).toHaveBeenCalledWith()
+      expect(h.res.status).not.toHaveBeenCalled()
+      expect(h.req.query.fields).toBe(fields)
+      for (const missing of needed) {
+        const denied = harness(path, method)
+        denied.req.query.fields = fields
+        denied.access.principal.mockResolvedValue({
+          ...principal,
+          is_superuser: false,
+          permissions: needed.filter((permission) => permission !== missing),
+        })
+        await denied.run()
+        expect(denied.res.status).toHaveBeenCalledWith(403)
+        expect(denied.next).not.toHaveBeenCalled()
+      }
+    }
+  }
+)
+
+it.each([
+  "*",
+  "*variants.prices",
+  "*variants.product.orders",
+  "*variants.product.product_specification",
+  "*variants.options.option",
+  "*stock_locations",
+  "stock_locations.address",
+])("keeps unreviewed inventory relations denied: %s", async (fields) => {
+  const h = harness("/admin/inventory-items/iitem_test")
+  h.req.query.fields = fields
+  await h.run()
+  expect(h.res.status).toHaveBeenCalledWith(403)
+  expect(h.res.json).toHaveBeenCalledWith({
+    message: "This field selection is not allowed",
+  })
+  expect(h.next).not.toHaveBeenCalled()
+})
+
+it.each(["GET", "HEAD"])(
+  "requires customer read access for native address expansion (%s)",
+  async (method) => {
+    for (const [permissions, fields, allowed] of [
+      [["customers.view"], "+*addresses", true],
+      [[], "+*addresses", false],
+      [["customers.view"], "+*addresses.customer", false],
+    ] as const) {
+      const h = harness("/admin/customers/cus_test", method)
+      h.req.query.fields = fields
+      h.access.principal.mockResolvedValue({
+        ...principal,
+        is_superuser: false,
+        permissions: [...permissions],
+      })
+      await h.run()
+      if (allowed) {
+        expect(h.next).toHaveBeenCalledWith()
+        expect(h.req.query.fields).toBe(fields)
+      } else {
+        expect(h.res.status).toHaveBeenCalledWith(403)
+        expect(h.next).not.toHaveBeenCalled()
+      }
+    }
+  }
+)
+
+it.each([
+  [
+    "/admin/orders/order_test",
+    "*payment_collections.payment_sessions",
+    "orders.view",
+    "payments.view",
+  ],
+  [
+    "/admin/orders/order_test",
+    "+payment_collections.payments.refunds.refund_reason",
+    "orders.view",
+    "payments.view",
+  ],
+  [
+    "/admin/stock-locations/sloc_test",
+    "*fulfillment_sets.service_zones",
+    "stock_locations.view",
+    "settings.view",
+  ],
+])(
+  "keeps related permissions on %s for %s",
+  async (path, fields, base, related) => {
+    for (const granted of [false, true]) {
+      const h = harness(path)
+      h.req.query.fields = fields
+      h.access.principal.mockResolvedValue({
+        ...principal,
+        is_superuser: false,
+        permissions: granted ? [base, related] : [base],
+      })
+      await h.run()
+      if (granted) expect(h.next).toHaveBeenCalledWith()
+      else {
+        expect(h.next).not.toHaveBeenCalled()
+        expect(h.res.json).toHaveBeenCalledWith({
+          message: "Additional permissions are required for these fields",
+        })
+      }
+    }
+  }
+)
+
+it("narrows the authorized customer group picker projection to member IDs", async () => {
+  for (const [permissions, fields, allowed] of [
+    [["customers.view"], "*customers", true],
+    [[], "*customers", false],
+    [["customers.view"], "*customers,customers.email", false],
+  ] as const) {
+    const h = harness("/admin/customer-groups")
+    h.req.query.fields = fields
+    h.access.principal.mockResolvedValue({
+      ...principal,
+      is_superuser: false,
+      permissions: [...permissions],
+    })
+    await h.run()
+    if (allowed) {
+      expect(h.next).toHaveBeenCalledWith()
+      expect(h.req.query.fields).toBe("+customers.id")
+    } else {
+      expect(h.res.status).toHaveBeenCalledWith(403)
+      expect(h.next).not.toHaveBeenCalled()
+    }
+  }
+})
+
+it("normalizes only the authorized native sales-channel hydration query", async () => {
+  const path = "/admin/promotions/rule-value-options/rules/sales_channel"
+  for (const [url, query, permissions, normalized] of [
+    [path, { limit: "1", id: "sc_lookup" }, ["promotions.view"], true],
+    [path, { limit: "1", id: "sc_lookup" }, [], false],
+    [path, { limit: "10", id: "sc_lookup" }, ["promotions.view"], false],
+    [path, { limit: "1", id: ["sc_lookup"] }, ["promotions.view"], false],
+    [path, { limit: "1", id: "unrelated" }, ["promotions.view"], false],
+    [
+      path,
+      { limit: "1", id: "sc_lookup", value: "sc_explicit" },
+      ["promotions.view"],
+      false,
+    ],
+    [
+      path.replace("/rules/", "/target-rules/"),
+      { limit: "1", id: "sc_lookup" },
+      ["promotions.view"],
+      false,
+    ],
+    [
+      path.replace("/sales_channel", "/region"),
+      { limit: "1", id: "sc_lookup" },
+      ["promotions.view"],
+      false,
+    ],
+  ] as const) {
+    const h = harness(url)
+    h.req.query = { ...query }
+    h.access.principal.mockResolvedValue({
+      ...principal,
+      is_superuser: false,
+      permissions: [...permissions],
+    })
+    await h.run()
+    if (!permissions.length) expect(h.res.status).toHaveBeenCalledWith(403)
+    else expect(h.next).toHaveBeenCalledWith()
+    if (normalized)
+      expect(h.req.query).toEqual({ limit: "1", value: "sc_lookup" })
+    else expect(h.req.query).toEqual(query)
+  }
+})
+
+it("does not add a fields key to strict native or custom read queries", async () => {
+  for (const path of [
+    "/admin/access/roles",
+    "/admin/promotions/rule-value-options/rules/sales_channel",
+  ]) {
+    const h = harness(path)
+    h.req.query = {}
+    await h.run()
+    expect(h.next).toHaveBeenCalledWith()
+    expect(Object.hasOwn(h.req.query, "fields")).toBe(false)
+  }
 })
