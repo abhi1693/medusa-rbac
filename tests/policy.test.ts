@@ -518,3 +518,49 @@ test("native inventory location table selects only reviewed location identifiers
   ])
     assert.equal(validateFieldSelection("inventory-items", fields), false)
 })
+
+test("native customer detail selects only the reviewed addresses relation", () => {
+  const base = path.dirname(
+    nativeRequire.resolve("@medusajs/dashboard/package.json")
+  )
+  for (const file of ["loader.ts", "customer-detail.tsx"]) {
+    const source = readFileSync(
+      path.join(base, "src/routes/customers/customer-detail", file),
+      "utf8"
+    )
+    const fields = source.match(/fields:\s*"([^"]+)"/)?.[1]
+    assert.equal(fields, "+*addresses")
+    assert.equal(validateFieldSelection("customers", fields), true)
+  }
+  for (const fields of [
+    "*",
+    "*addresses.customer",
+    "*orders",
+    "*auth_identity",
+  ])
+    assert.equal(validateFieldSelection("customers", fields), false)
+})
+
+test("the native customer order table selects a bounded shipping field", () => {
+  const base = path.dirname(
+    nativeRequire.resolve("@medusajs/dashboard/package.json")
+  )
+  const source = readFileSync(
+    path.join(
+      base,
+      "src/routes/customers/customer-detail/components/customer-order-section/customer-order-section.tsx"
+    ),
+    "utf8"
+  )
+  const fields = ["DEFAULT_FIELDS", "DEFAULT_RELATIONS"].map(
+    (key) =>
+      source.match(new RegExp("const " + key + '\\s*=\\s*"([^"]+)"'))?.[1]
+  )
+  assert.ok(fields.every(Boolean))
+  assert.equal(validateFieldSelection("orders", fields.join(",")), true)
+  for (const field of [
+    "+shipping_address.metadata",
+    "+shipping_address.customer",
+  ])
+    assert.equal(validateFieldSelection("orders", field), false)
+})

@@ -59,8 +59,15 @@ export function validateFieldSelection(
     // Narrow relation IDs requested by native Admin list/count screens.
     collections: ["products.id"],
     "customer-groups": ["customers.id"],
+    // Dashboard 2.22.2 customer detail loads the native addresses relation.
+    customers: ["*addresses"],
     // Native Admin requests these computed order summaries explicitly.
-    orders: ["payment_status", "fulfillment_status"],
+    orders: [
+      "payment_status",
+      "fulfillment_status",
+      // The customer detail order table displays the shipping country.
+      "shipping_address.country_code",
+    ],
     products: [
       "*categories",
       // Dashboard's native product detail also expands this linked profile.

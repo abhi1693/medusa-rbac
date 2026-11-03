@@ -41,3 +41,10 @@ Dashboard 2.22.2 `src/routes/inventory/inventory-detail/constants.ts` declares `
 The native Dashboard constant is read in the contract suite. HTTP middleware tests exercise GET/HEAD with every required grant, deny each missing grant independently, and continue denying root wildcards and deeper product, price, option and private specification expansions. Official relation-selection semantics: https://docs.medusajs.com/api/admin#select-nested-relations .
 
 The same page’s `components/location-levels-table/location-list-table.tsx` requests `+stock_locations.id,+stock_locations.name` for inventory location levels and throws its query error at the page boundary. Those two scalar relation paths are reviewed explicitly in the same field profile. Broader stock-location expansion and address/metadata/order projections remain denied. The existing stock-location read grant remains required.
+
+The Medusa Dashboard 2.22.2 customer detail loader and component both select
+`+*addresses`. The native customer retrieve route uses that projection to
+populate its address panel. The adapter allows the direct addresses relation
+under the existing `customers.view` capability and rejects deeper expansions.
+The adjacent order table selects `shipping_address.country_code` under the
+existing order read policy. No additional shipping-address fields are enabled.

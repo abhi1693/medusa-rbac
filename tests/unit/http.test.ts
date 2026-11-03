@@ -967,3 +967,30 @@ it.each([
   })
   expect(h.next).not.toHaveBeenCalled()
 })
+
+it.each(["GET", "HEAD"])(
+  "requires customer read access for native address expansion (%s)",
+  async (method) => {
+    for (const [permissions, fields, allowed] of [
+      [["customers.view"], "+*addresses", true],
+      [[], "+*addresses", false],
+      [["customers.view"], "+*addresses.customer", false],
+    ] as const) {
+      const h = harness("/admin/customers/cus_test", method)
+      h.req.query.fields = fields
+      h.access.principal.mockResolvedValue({
+        ...principal,
+        is_superuser: false,
+        permissions: [...permissions],
+      })
+      await h.run()
+      if (allowed) {
+        expect(h.next).toHaveBeenCalledWith()
+        expect(h.req.query.fields).toBe(fields)
+      } else {
+        expect(h.res.status).toHaveBeenCalledWith(403)
+        expect(h.next).not.toHaveBeenCalled()
+      }
+    }
+  }
+)
