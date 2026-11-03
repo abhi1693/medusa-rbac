@@ -61,12 +61,45 @@ export function validateFieldSelection(
     "customer-groups": ["customers.id"],
     // Dashboard 2.22.2 customer detail loads the native addresses relation.
     customers: ["*addresses"],
+    // Native settings and taxonomy detail components select these named links.
+    regions: ["*payment_providers"],
+    "product-categories": ["products.id"],
+    "product-options": ["values.id", "values.value", "values.rank"],
+    "stock-locations": [
+      "*sales_channels",
+      "*address",
+      "*fulfillment_sets",
+      "*fulfillment_sets.service_zones",
+      "*fulfillment_sets.service_zones.shipping_options",
+      "*fulfillment_sets.service_zones.shipping_options.shipping_profile",
+      "fulfillment_sets.type",
+      "fulfillment_sets.name",
+      "*fulfillment_sets.service_zones.geo_zones",
+      "*fulfillment_sets.service_zones.shipping_options.rules",
+      "*fulfillment_providers",
+    ],
     // Native Admin requests these computed order summaries explicitly.
     orders: [
       "payment_status",
       "fulfillment_status",
       // The customer detail order table displays the shipping country.
       "shipping_address.country_code",
+      "item_discount_total",
+      "discount_subtotal",
+      "shipping_discount_total",
+      "refundable_total",
+      "order_change",
+      "*items.variant.options",
+      "items.variant.manage_inventory",
+      "*items.variant.inventory_items.inventory",
+      "items.variant.inventory_items.required_quantity",
+      "*promotions",
+      "fulfillments.shipping_option.service_zone.fulfillment_set.type",
+      "*fulfillments.items",
+      "*fulfillments.labels",
+      "*payment_collections.payment_sessions",
+      "*payment_collections.payments.refunds.refund_reason",
+      "region.automatic_taxes",
     ],
     products: [
       "*categories",
@@ -89,6 +122,10 @@ export function validateFieldSelection(
     ],
     "product-variants": [
       "inventory_quantity",
+      "inventory_items.*",
+      "inventory_items.inventory.id",
+      "inventory_items.inventory.title",
+      "inventory_items.inventory.sku",
       // Reviewed native Variant table/detail expansions. Inventory grants are
       // checked separately by the Admin middleware.
       "*inventory_items",
@@ -121,6 +158,9 @@ export function validateFieldSelection(
   const allowed = new Set(override || [...safe, ...(extra[resource] || [])])
   return fields.split(",").every((value) => {
     const field = value.trim()
+    // The option detail excludes the products relation; adding it remains denied.
+    if (!override && resource === "product-options" && field === "-products")
+      return true
     const name = field.replace(/^[+-]/, "")
     // Native Admin also selects reviewed relations without the '*' prefix.
     return allowed.has(name) || allowed.has(`*${name}`)

@@ -564,3 +564,46 @@ test("the native customer order table selects a bounded shipping field", () => {
   ])
     assert.equal(validateFieldSelection("orders", field), false)
 })
+
+test("reviewed native list and detail selections preserve field boundaries", () => {
+  for (const [resource, fields] of [
+    ["regions", "*payment_providers"],
+    [
+      "stock-locations",
+      "*sales_channels, *address, *fulfillment_sets, *fulfillment_sets.service_zones, *fulfillment_sets.service_zones.shipping_options, *fulfillment_sets.service_zones.shipping_options.shipping_profile, fulfillment_sets.type, fulfillment_sets.name, *fulfillment_sets.service_zones.geo_zones, *fulfillment_sets.service_zones.shipping_options.rules, *fulfillment_providers",
+    ],
+    ["product-options", "-products, values.id, values.value, values.rank"],
+    [
+      "orders",
+      "item_discount_total, discount_subtotal, shipping_discount_total, refundable_total, order_change, *items.variant.options, +items.variant.manage_inventory, *items.variant.inventory_items.inventory, +items.variant.inventory_items.required_quantity, *promotions, +fulfillments.shipping_option.service_zone.fulfillment_set.type, *fulfillments.items, *fulfillments.labels, *payment_collections.payment_sessions, *payment_collections.payments.refunds.refund_reason, region.automatic_taxes",
+    ],
+    [
+      "product-variants",
+      "inventory_items.*, inventory_items.inventory.id, inventory_items.inventory.title, inventory_items.inventory.sku",
+    ],
+    ["product-categories", "products.id"],
+  ])
+    assert.equal(validateFieldSelection(resource, fields), true, resource)
+  for (const [resource, fields] of [
+    ["product-options", "+products"],
+    ["product-options", "-products.metadata"],
+    ["product-options", "*products"],
+    [
+      "stock-locations",
+      "*fulfillment_sets.service_zones.shipping_options.provider",
+    ],
+    ["regions", "*payment_providers.credentials"],
+    ["orders", "*payment_collections.payment_sessions.payment"],
+    ["orders", "*items.variant.product.product_specification"],
+    [
+      "product-variants",
+      "*inventory_items.inventory.location_levels.stock_locations",
+    ],
+    ["product-categories", "*products"],
+  ])
+    assert.equal(validateFieldSelection(resource, fields), false)
+  assert.equal(
+    validateFieldSelection("product-options", "-products", []),
+    false
+  )
+})

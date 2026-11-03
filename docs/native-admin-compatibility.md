@@ -48,3 +48,12 @@ populate its address panel. The adapter allows the direct addresses relation
 under the existing `customers.view` capability and rejects deeper expansions.
 The adjacent order table selects `shipping_address.country_code` under the
 existing order read policy. No additional shipping-address fields are enabled.
+
+The reviewed Dashboard order detail, region list/detail, location list/detail,
+category product picker, option detail and product stock selectors use a
+bounded set of additional fields. Inventory fields still require inventory
+read access. Order payment session/refund reason expansion requires payment
+read access, and location fulfillment/sales channel expansions require
+settings read access. The product option's `-products` exclusion does not grant
+access to the products relation. API-key administration, workflow internals
+and notification payloads retain their existing denied policy.

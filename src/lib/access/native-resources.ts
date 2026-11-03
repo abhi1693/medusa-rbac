@@ -479,6 +479,24 @@ export const nativeResources: readonly ResourceDefinition[] = immutableConfig(
     ...resource,
     fieldRequirements: [
       { pattern: /inventory/, permissions: ["inventory.view"] },
+      ...(resource.root === "orders"
+        ? [
+            {
+              pattern:
+                /(?:^|,)\s*[+-]?\*?payment_collections\.(?:payment_sessions|payments\.refunds\.refund_reason)\s*(?:,|$)/,
+              permissions: ["payments.view"],
+            },
+          ]
+        : []),
+      ...(resource.root === "stock-locations"
+        ? [
+            {
+              pattern:
+                /(?:^|,)\s*[+-]?\*?(?:fulfillment_sets|fulfillment_providers|sales_channels)(?:\.|\s*(?:,|$))/,
+              permissions: ["settings.view"],
+            },
+          ]
+        : []),
     ],
   }))
 )

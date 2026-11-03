@@ -994,3 +994,45 @@ it.each(["GET", "HEAD"])(
     }
   }
 )
+
+it.each([
+  [
+    "/admin/orders/order_test",
+    "*payment_collections.payment_sessions",
+    "orders.view",
+    "payments.view",
+  ],
+  [
+    "/admin/orders/order_test",
+    "+payment_collections.payments.refunds.refund_reason",
+    "orders.view",
+    "payments.view",
+  ],
+  [
+    "/admin/stock-locations/sloc_test",
+    "*fulfillment_sets.service_zones",
+    "stock_locations.view",
+    "settings.view",
+  ],
+])(
+  "keeps related permissions on %s for %s",
+  async (path, fields, base, related) => {
+    for (const granted of [false, true]) {
+      const h = harness(path)
+      h.req.query.fields = fields
+      h.access.principal.mockResolvedValue({
+        ...principal,
+        is_superuser: false,
+        permissions: granted ? [base, related] : [base],
+      })
+      await h.run()
+      if (granted) expect(h.next).toHaveBeenCalledWith()
+      else {
+        expect(h.next).not.toHaveBeenCalled()
+        expect(h.res.json).toHaveBeenCalledWith({
+          message: "Additional permissions are required for these fields",
+        })
+      }
+    }
+  }
+)
