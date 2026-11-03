@@ -607,3 +607,30 @@ test("reviewed native list and detail selections preserve field boundaries", () 
     false
   )
 })
+
+test("native order summaries and option tables allow direct owning-module relations", () => {
+  for (const [resource, fields] of [
+    ["returns", "*items,*items.reason"],
+    ["returns", "+received_at,*items"],
+    ["shipping-options", "+service_zone.fulfillment_set.type"],
+    [
+      "stock-locations",
+      "*fulfillment_sets.service_zones.geo_zones,fulfillment_sets.service_zones.name",
+    ],
+
+    ["claims", "*additional_items"],
+    ["exchanges", "*additional_items"],
+    [
+      "products",
+      "id,title,handle,thumbnail,status,*collection,*sales_channels,*product_options,variants.id",
+    ],
+  ])
+    assert.equal(validateFieldSelection(resource, fields), true, resource)
+  for (const [resource, fields] of [
+    ["returns", "*items.reason.parent_return_reason"],
+    ["claims", "*additional_items.variant"],
+    ["exchanges", "*additional_items.variant.product"],
+    ["products", "*product_options.option.values"],
+  ])
+    assert.equal(validateFieldSelection(resource, fields), false, resource)
+})

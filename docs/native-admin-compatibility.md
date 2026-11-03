@@ -57,3 +57,17 @@ read access, and location fulfillment/sales channel expansions require
 settings read access. The product option's `-products` exclusion does not grant
 access to the products relation. API-key administration, workflow internals
 and notification payloads retain their existing denied policy.
+
+The customer group picker requests `*customers` but checks only member IDs.
+After the existing customer permission succeeds, the adapter projects the
+exact picker request to `+customers.id`. Mixed or nested wildcard requests
+continue to be denied.
+
+The order summary and timeline request return items and their reason, plus
+claim/exchange additional items under the existing order read policy. Option
+detail lists the native product-option join rows under the existing product
+read policy. These are direct, reviewed selections; deeper relations are
+not added.
+
+The shipping-option editor and service-zone areas form use the explicit
+fulfillment-set type and zone name fields with existing settings permissions.

@@ -11,7 +11,10 @@ import type AccessControlService from "../../modules/access-control/service"
 import { canonicalPath } from "../../lib/access/route-facts"
 import { describeNative } from "../../lib/access/native-resources"
 import { operationAllowed } from "../../lib/access/resources"
-import { validateFieldSelection } from "../../lib/access/policy"
+import {
+  nativeFieldSelection,
+  validateFieldSelection,
+} from "../../lib/access/policy"
 
 export async function enforceAdminAccess(
   request: MedusaRequest,
@@ -52,17 +55,22 @@ export async function enforceAdminAccess(
     const fallback = descriptor.action.fallbackFields
     if (fallback && (!principal.active || !fallback.permissions.every(allowed)))
       req.query.fields = fallback.fields.join(",")
-    if (
-      ["GET", "HEAD"].includes(req.method) &&
-      !validateFieldSelection(
+    if (["GET", "HEAD"].includes(req.method)) {
+      req.query.fields = nativeFieldSelection(
         descriptor.fieldResource,
-        req.query.fields,
-        descriptor.fields
+        req.query.fields
       )
-    )
-      return res
-        .status(403)
-        .json({ message: "This field selection is not allowed" })
+      if (
+        !validateFieldSelection(
+          descriptor.fieldResource,
+          req.query.fields,
+          descriptor.fields
+        )
+      )
+        return res
+          .status(403)
+          .json({ message: "This field selection is not allowed" })
+    }
     if (
       typeof req.query.fields === "string" &&
       descriptor.fieldRequirements.some(

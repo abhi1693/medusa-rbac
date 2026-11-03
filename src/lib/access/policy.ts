@@ -47,6 +47,16 @@ export function can(
   )
 }
 
+/** Dashboard's group picker only reads member IDs to disable existing choices. */
+export function nativeFieldSelection<T>(
+  resource: string,
+  fields: T
+): T | string {
+  return resource === "customer-groups" && fields === "*customers"
+    ? "+customers.id"
+    : fields
+}
+
 export function validateFieldSelection(
   resource: string,
   fields: unknown,
@@ -61,8 +71,13 @@ export function validateFieldSelection(
     "customer-groups": ["customers.id"],
     // Dashboard 2.22.2 customer detail loads the native addresses relation.
     customers: ["*addresses"],
+    // Order summary and timeline request these owning order-module relations.
+    returns: ["*items", "*items.reason"],
+    claims: ["*additional_items"],
+    exchanges: ["*additional_items"],
     // Native settings and taxonomy detail components select these named links.
     regions: ["*payment_providers"],
+    "shipping-options": ["service_zone.fulfillment_set.type"],
     "product-categories": ["products.id"],
     "product-options": ["values.id", "values.value", "values.rank"],
     "stock-locations": [
@@ -75,6 +90,7 @@ export function validateFieldSelection(
       "fulfillment_sets.type",
       "fulfillment_sets.name",
       "*fulfillment_sets.service_zones.geo_zones",
+      "fulfillment_sets.service_zones.name",
       "*fulfillment_sets.service_zones.shipping_options.rules",
       "*fulfillment_providers",
     ],
@@ -103,6 +119,8 @@ export function validateFieldSelection(
     ],
     products: [
       "*categories",
+      // Option detail lists the owning Product module join records.
+      "*product_options",
       // Dashboard's native product detail also expands this linked profile.
       "*shipping_profile",
       "variants.id",

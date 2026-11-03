@@ -1036,3 +1036,27 @@ it.each([
     }
   }
 )
+
+it("narrows the authorized customer group picker projection to member IDs", async () => {
+  for (const [permissions, fields, allowed] of [
+    [["customers.view"], "*customers", true],
+    [[], "*customers", false],
+    [["customers.view"], "*customers,customers.email", false],
+  ] as const) {
+    const h = harness("/admin/customer-groups")
+    h.req.query.fields = fields
+    h.access.principal.mockResolvedValue({
+      ...principal,
+      is_superuser: false,
+      permissions: [...permissions],
+    })
+    await h.run()
+    if (allowed) {
+      expect(h.next).toHaveBeenCalledWith()
+      expect(h.req.query.fields).toBe("+customers.id")
+    } else {
+      expect(h.res.status).toHaveBeenCalledWith(403)
+      expect(h.next).not.toHaveBeenCalled()
+    }
+  }
+})
