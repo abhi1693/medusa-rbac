@@ -78,3 +78,9 @@ select the direct relations or named identifiers exercised by the pinned
 Dashboard. The existing product, customer, promotion, price, settings and
 inventory capabilities still apply. Nested customer, location, shipping
 profile and image expansions outside the reviewed selectors remain denied.
+
+The native promotion rule editor sends `id` with `limit=1` when hydrating
+an existing sales-channel rule, while the owning validator accepts `value`.
+After the existing promotions read grant succeeds, the adapter translates
+that exact scalar lookup. Ambiguous, invalid or unrelated queries are left
+to the native validator.

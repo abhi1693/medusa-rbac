@@ -57,6 +57,25 @@ export function nativeFieldSelection<T>(
     : fields
 }
 
+/** Native promotion rule picker hydrates a selected sales channel by ID. */
+export function nativePromotionRuleValue(
+  resource: string,
+  params: Record<string, string>,
+  query: { id?: unknown; value?: unknown; limit?: unknown }
+): string | undefined {
+  if (
+    resource === "promotions" &&
+    params.rule_type === "rules" &&
+    params.rule_attribute_id === "sales_channel" &&
+    query.limit === "1" &&
+    query.value === undefined &&
+    typeof query.id === "string" &&
+    /^sc_[a-z0-9]+$/i.test(query.id)
+  )
+    return query.id
+  return undefined
+}
+
 export function validateFieldSelection(
   resource: string,
   fields: unknown,

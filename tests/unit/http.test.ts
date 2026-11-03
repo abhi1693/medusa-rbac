@@ -1060,3 +1060,46 @@ it("narrows the authorized customer group picker projection to member IDs", asyn
     }
   }
 })
+
+it("normalizes only the authorized native sales-channel hydration query", async () => {
+  const path = "/admin/promotions/rule-value-options/rules/sales_channel"
+  for (const [url, query, permissions, normalized] of [
+    [path, { limit: "1", id: "sc_lookup" }, ["promotions.view"], true],
+    [path, { limit: "1", id: "sc_lookup" }, [], false],
+    [path, { limit: "10", id: "sc_lookup" }, ["promotions.view"], false],
+    [path, { limit: "1", id: ["sc_lookup"] }, ["promotions.view"], false],
+    [path, { limit: "1", id: "unrelated" }, ["promotions.view"], false],
+    [
+      path,
+      { limit: "1", id: "sc_lookup", value: "sc_explicit" },
+      ["promotions.view"],
+      false,
+    ],
+    [
+      path.replace("/rules/", "/target-rules/"),
+      { limit: "1", id: "sc_lookup" },
+      ["promotions.view"],
+      false,
+    ],
+    [
+      path.replace("/sales_channel", "/region"),
+      { limit: "1", id: "sc_lookup" },
+      ["promotions.view"],
+      false,
+    ],
+  ] as const) {
+    const h = harness(url)
+    h.req.query = { ...query }
+    h.access.principal.mockResolvedValue({
+      ...principal,
+      is_superuser: false,
+      permissions: [...permissions],
+    })
+    await h.run()
+    if (!permissions.length) expect(h.res.status).toHaveBeenCalledWith(403)
+    else expect(h.next).toHaveBeenCalledWith()
+    if (normalized)
+      expect(h.req.query).toEqual({ limit: "1", value: "sc_lookup" })
+    else expect(h.req.query).toEqual(query)
+  }
+})

@@ -13,6 +13,7 @@ import { describeNative } from "../../lib/access/native-resources"
 import { operationAllowed } from "../../lib/access/resources"
 import {
   nativeFieldSelection,
+  nativePromotionRuleValue,
   validateFieldSelection,
 } from "../../lib/access/policy"
 
@@ -56,6 +57,15 @@ export async function enforceAdminAccess(
     if (fallback && (!principal.active || !fallback.permissions.every(allowed)))
       req.query.fields = fallback.fields.join(",")
     if (["GET", "HEAD"].includes(req.method)) {
+      const ruleValue = nativePromotionRuleValue(
+        descriptor.resource,
+        descriptor.params,
+        req.query
+      )
+      if (ruleValue !== undefined) {
+        req.query.value = ruleValue
+        delete req.query.id
+      }
       req.query.fields = nativeFieldSelection(
         descriptor.fieldResource,
         req.query.fields
