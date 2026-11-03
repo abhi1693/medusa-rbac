@@ -495,3 +495,26 @@ test("native inventory detail fields match the reviewed Dashboard selection", ()
   ])
     assert.equal(validateFieldSelection("inventory-items", fields), false)
 })
+
+test("native inventory location table selects only reviewed location identifiers and names", () => {
+  const base = path.dirname(
+    nativeRequire.resolve("@medusajs/dashboard/package.json")
+  )
+  const source = readFileSync(
+    path.join(
+      base,
+      "src/routes/inventory/inventory-detail/components/location-levels-table/location-list-table.tsx"
+    ),
+    "utf8"
+  )
+  const fields = source.match(/fields:\s*"([^"]+)"/)?.[1]
+  assert.equal(fields, "+stock_locations.id,+stock_locations.name")
+  assert.equal(validateFieldSelection("inventory-items", fields), true)
+  for (const fields of [
+    "*stock_locations",
+    "stock_locations.address",
+    "stock_locations.metadata",
+    "stock_locations.orders",
+  ])
+    assert.equal(validateFieldSelection("inventory-items", fields), false)
+})

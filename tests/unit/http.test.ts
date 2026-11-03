@@ -904,7 +904,7 @@ it("resolves audit participants including deleted users and historical role/invi
 })
 
 it.each(["GET", "HEAD"])(
-  "allows the native inventory detail selection with all read capabilities (%s)",
+  "allows native inventory detail and location selections with all read capabilities (%s)",
   async (method) => {
     const needed = [
       "inventory.view",
@@ -912,29 +912,39 @@ it.each(["GET", "HEAD"])(
       "prices.view",
       "stock_locations.view",
     ]
-    const fields = "*variants,*variants.product,*variants.options"
-    const h = harness("/admin/inventory-items/iitem_test", method)
-    h.req.query.fields = fields
-    h.access.principal.mockResolvedValue({
-      ...principal,
-      is_superuser: false,
-      permissions: needed,
-    })
-    await h.run()
-    expect(h.next).toHaveBeenCalledWith()
-    expect(h.res.status).not.toHaveBeenCalled()
-    expect(h.req.query.fields).toBe(fields)
-    for (const missing of needed) {
-      const denied = harness("/admin/inventory-items/iitem_test", method)
-      denied.req.query.fields = fields
-      denied.access.principal.mockResolvedValue({
+    for (const [path, fields] of [
+      [
+        "/admin/inventory-items/iitem_test",
+        "*variants,*variants.product,*variants.options",
+      ],
+      [
+        "/admin/inventory-items/iitem_test/location-levels",
+        "+stock_locations.id,+stock_locations.name",
+      ],
+    ]) {
+      const h = harness(path, method)
+      h.req.query.fields = fields
+      h.access.principal.mockResolvedValue({
         ...principal,
         is_superuser: false,
-        permissions: needed.filter((permission) => permission !== missing),
+        permissions: needed,
       })
-      await denied.run()
-      expect(denied.res.status).toHaveBeenCalledWith(403)
-      expect(denied.next).not.toHaveBeenCalled()
+      await h.run()
+      expect(h.next).toHaveBeenCalledWith()
+      expect(h.res.status).not.toHaveBeenCalled()
+      expect(h.req.query.fields).toBe(fields)
+      for (const missing of needed) {
+        const denied = harness(path, method)
+        denied.req.query.fields = fields
+        denied.access.principal.mockResolvedValue({
+          ...principal,
+          is_superuser: false,
+          permissions: needed.filter((permission) => permission !== missing),
+        })
+        await denied.run()
+        expect(denied.res.status).toHaveBeenCalledWith(403)
+        expect(denied.next).not.toHaveBeenCalled()
+      }
     }
   }
 )
@@ -945,6 +955,8 @@ it.each([
   "*variants.product.orders",
   "*variants.product.product_specification",
   "*variants.options.option",
+  "*stock_locations",
+  "stock_locations.address",
 ])("keeps unreviewed inventory relations denied: %s", async (fields) => {
   const h = harness("/admin/inventory-items/iitem_test")
   h.req.query.fields = fields
