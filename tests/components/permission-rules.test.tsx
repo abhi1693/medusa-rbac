@@ -1,3 +1,4 @@
+import { SUPERUSER_AUTHORITY } from "../../src/lib/access/permissions"
 import { TooltipProvider } from "@medusajs/ui"
 import { useState } from "react"
 import { it, expect, vi } from "vitest"
@@ -166,6 +167,7 @@ it("shows immutable rule previews and custom personal permission labels", () => 
   render(
     <TooltipProvider delayDuration={0} skipDelayDuration={0}>
       <MyAccess
+        superuserAuthority={SUPERUSER_AUTHORITY}
         access={createPrincipal({
           permissions: ["documents.read"],
           rules: [{ permission: "documents.*", effect: "allow" }],

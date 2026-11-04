@@ -1,3 +1,4 @@
+import { SUPERUSER_AUTHORITY } from "../../src/lib/access/permissions"
 import { it, expect, vi, beforeEach } from "vitest"
 import { act, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -193,6 +194,7 @@ it("supports a role viewer without privileged editing or native user links", asy
 it("renders allow and deny rules as readable cards with typed conditions", () => {
   render(
     <PermissionSummary
+      superuserAuthority={SUPERUSER_AUTHORITY}
       role={createRole({
         permissions: [],
         rules: [
