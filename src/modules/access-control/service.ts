@@ -38,6 +38,7 @@ import InvitationAccess from "./models/invitation-access"
 import InvitationRole from "./models/invitation-role"
 import {
   validatePermissions,
+  isSuperuser,
   type AccessPrincipal,
   type Permission,
 } from "../../lib/access/permissions"
@@ -272,8 +273,9 @@ class AccessControlService extends MedusaService({
     context: PermissionContext = {}
   ) {
     return (
-      this.configuration.ids.includes(permission) &&
-      evaluatePermission(principal, permission, context)
+      isSuperuser(principal) ||
+      (this.configuration.ids.includes(permission) &&
+        evaluatePermission(principal, permission, context))
     )
   }
 

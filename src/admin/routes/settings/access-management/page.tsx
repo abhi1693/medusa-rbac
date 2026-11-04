@@ -99,7 +99,8 @@ const AccessManagement = () => {
         <MyAccess
           access={access}
           roles={query.data?.roles}
-          permissionCatalog={query.data?.permission_catalog}
+          permissionCatalog={query.data!.permission_catalog}
+          superuserAuthority={query.data!.superuser_authority}
         />
       </Tabs.Content>
     </Tabs>

@@ -13,10 +13,10 @@ import {
 import { accessApi, errorMessage, type PermissionEntry } from "../../lib/access"
 import { isPermissionContext } from "../../../lib/access/permission-context"
 import { ActorPicker } from "./actor-picker"
+import type { SuperuserAuthority } from "../../../lib/access/permissions"
 
 const reasons = {
   inactive: "This account has no active access.",
-  superuser: "Superuser grants every registered permission.",
   no_match: "No grant or contextual rule matches this permission and context.",
   allow: "The highest-ranked matching rule allows this permission.",
   deny: "The highest-ranked matching rule denies this permission.",
@@ -24,11 +24,13 @@ const reasons = {
 
 export function PermissionChecker({
   permission,
+  superuserAuthority,
   actorTypes,
   userId,
   onClose,
 }: {
   permission: PermissionEntry
+  superuserAuthority: SuperuserAuthority
   actorTypes: string[]
   userId: string
   onClose: () => void
@@ -174,7 +176,9 @@ export function PermissionChecker({
                 {check.data.decision.allowed ? "Allowed" : "Denied"}
               </Badge>
               <Text className="mt-3">
-                {reasons[check.data.decision.reason]}
+                {check.data.decision.reason === "superuser"
+                  ? superuserAuthority.description
+                  : reasons[check.data.decision.reason]}
               </Text>
               {check.data.decision.matches.map((rule, index) => (
                 <div

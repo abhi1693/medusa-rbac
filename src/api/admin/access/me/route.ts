@@ -1,3 +1,4 @@
+import { SUPERUSER_AUTHORITY } from "../../../../lib/access/permissions"
 import type {
   AuthenticatedMedusaRequest,
   MedusaResponse,
@@ -19,6 +20,7 @@ export async function GET(
       )
     : []
   res.json({
+    superuser_authority: SUPERUSER_AUTHORITY,
     access: principal,
     permission_catalog: access
       .permissionDefinitions()

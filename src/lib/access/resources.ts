@@ -1,7 +1,7 @@
 import type { MedusaRequest } from "@medusajs/framework/http"
 import type { RouteFacts, RouteMethod, RouteRegistration } from "./route-facts"
 import { matchRoute } from "./route-facts"
-import type { AccessPrincipal } from "./permissions"
+import { isSuperuser, type AccessPrincipal } from "./permissions"
 import { immutableConfig } from "./immutable-config"
 
 const identifier = /^[a-z][a-z0-9_-]{0,63}$/
@@ -283,11 +283,17 @@ export function operationAllowed(
     return (
       operation.policy.permissions.length === 0 && !operation.policy.superuser
     )
+  if (
+    principal &&
+    isSuperuser(principal) &&
+    operation.facts.namespace === "admin"
+  )
+    return true
   return Boolean(
     principal &&
     operation.actorTypes.includes(principal.actor_type) &&
     (operation.access === "authenticated" || principal.active) &&
-    (!operation.policy.superuser || principal.is_superuser) &&
+    (!operation.policy.superuser || isSuperuser(principal)) &&
     operation.policy.permissions.every(allows)
   )
 }

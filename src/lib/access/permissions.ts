@@ -66,3 +66,21 @@ export type AccessPrincipal = {
   permissions: Permission[]
   rules?: PermissionRule[]
 }
+
+/** Elevated authority applies only to an active native staff principal. */
+export function isSuperuser(principal: AccessPrincipal): boolean {
+  return (
+    principal.actor_type === "user" &&
+    principal.active &&
+    principal.is_superuser
+  )
+}
+
+// Describes authority beyond the finite permission catalog without inventing
+// grant identifiers for native routes that ordinary roles cannot access.
+export const SUPERUSER_AUTHORITY = Object.freeze({
+  scope: "all_admin_operations" as const,
+  description:
+    "An active native staff account with the Superuser role can access all registered Admin pages and operations, including publishable API keys, secret API keys, workflows and plugin routes without a permission mapping. All permissions below are included, along with future permissions. Native authentication, validation and account safety protections still apply.",
+})
+export type SuperuserAuthority = typeof SUPERUSER_AUTHORITY
