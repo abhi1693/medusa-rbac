@@ -1,3 +1,5 @@
+import { withAccessMetadata } from "../fixtures/access"
+import { SUPERUSER_AUTHORITY } from "../../src/lib/access/permissions"
 import { it, expect, vi, beforeEach } from "vitest"
 import { act, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -48,7 +50,7 @@ beforeEach(() => {
       if (options?.method) return {}
       const value = responses[String(url).split("/").at(-1)!]
       if (value instanceof Error) throw value
-      return value
+      return withAccessMetadata(String(url), value)
     })
 })
 function mount(cached = false) {
@@ -152,7 +154,9 @@ it("protects the system role and explains future permissions", async () => {
     await screen.findByRole("heading", { name: "Superuser" })
   ).toBeVisible()
   expect(screen.getByText("All permissions")).toBeVisible()
-  expect(screen.getByText(/including permissions added later/)).toBeVisible()
+  expect(screen.getByText(SUPERUSER_AUTHORITY.description)).toBeVisible()
+  for (const permission of editorPermissions)
+    expect(screen.getByText(permission.label)).toBeVisible()
   expect(screen.getByText(/protected system role/)).toBeVisible()
   expect(
     screen.queryByRole("button", { name: "Duplicate role" })
@@ -193,6 +197,7 @@ it("supports a role viewer without privileged editing or native user links", asy
 it("renders allow and deny rules as readable cards with typed conditions", () => {
   render(
     <PermissionSummary
+      superuserAuthority={SUPERUSER_AUTHORITY}
       role={createRole({
         permissions: [],
         rules: [

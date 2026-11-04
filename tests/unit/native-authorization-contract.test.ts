@@ -129,18 +129,34 @@ describe("reviewed native authorization contract", () => {
           )?.access
         ).toBe("public")
       } else expect(comparable(policyFor(method, path))).toEqual(policy)
-      for (const scenario of [
-        "anonymous",
-        "inactive",
-        "staff",
-        "superuser",
-      ] as const)
+      for (const scenario of ["anonymous", "inactive", "staff"] as const)
         expect(
           await observeEnforcement(method, path, scenario),
           scenario
         ).toEqual(enforcement[scenario])
     }
   )
+
+  it("authorizes Superuser across the full native inventory while preserving guarded deletion", async () => {
+    for (const entry of contract.routes) {
+      const actual = await observeEnforcement(
+        entry.method,
+        entry.path,
+        "superuser"
+      )
+      if (entry.method === "DELETE" && entry.route === "/admin/users/:id")
+        expect(actual, entry.path).toEqual({
+          allowed: true,
+          status: 307,
+          redirect: "/admin/access/staff/" + entry.path.split("/").at(-1),
+        })
+      else
+        expect(actual, entry.method + " " + entry.path).toEqual({
+          allowed: true,
+          status: 200,
+        })
+    }
+  })
 
   it("preserves HEAD authorization for every registered GET", () => {
     for (const entry of contract.routes.filter(

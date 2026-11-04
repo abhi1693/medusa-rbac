@@ -1,5 +1,5 @@
 import type { PermissionContext, PermissionRule } from "./config"
-import type { AccessPrincipal } from "./permissions"
+import { isSuperuser, type AccessPrincipal } from "./permissions"
 import { permissionKeyMatches } from "./permission-key"
 
 export type PermissionDecision = {
@@ -16,7 +16,7 @@ export function explainPermission(
 ): PermissionDecision {
   if (!principal.active)
     return { allowed: false, reason: "inactive", matches: [] }
-  if (principal.is_superuser)
+  if (isSuperuser(principal))
     return { allowed: true, reason: "superuser", matches: [] }
   const matches: PermissionDecision["matches"] = (principal.rules || [])
     .filter(

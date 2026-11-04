@@ -97,6 +97,11 @@ export function PermissionCatalog({
         Permissions are registered by the plugin and your application. Use their
         identifiers in role definitions, rules and server checks.
       </Text>
+      {superuser && catalog.data && (
+        <Text className="text-ui-fg-subtle">
+          {catalog.data.superuser_authority.description}
+        </Text>
+      )}
       <SettingsTable
         title="Permission catalog"
         instance={table}
@@ -107,6 +112,7 @@ export function PermissionCatalog({
       {superuser && selected && (
         <PermissionChecker
           permission={selected}
+          superuserAuthority={catalog.data!.superuser_authority}
           actorTypes={catalog.data?.actor_types || ["user", "customer"]}
           userId={userId}
           onClose={() => setSelected(null)}

@@ -1,6 +1,10 @@
 import { evaluatePermission, type PermissionContext } from "./config"
 import nativeFields from "./native-fields.json"
-import type { Permission, AccessPrincipal } from "./permissions"
+import {
+  isSuperuser,
+  type Permission,
+  type AccessPrincipal,
+} from "./permissions"
 import { canonicalPath } from "./route-facts"
 import { describeNative } from "./native-resources"
 export { additionalWritePermissions } from "./write-permissions"
@@ -41,9 +45,12 @@ export function can(
   context: PermissionContext = {}
 ): boolean {
   return (
-    principal.active &&
-    (!policy.superuser || principal.is_superuser) &&
-    policy.permissions.every((p) => evaluatePermission(principal, p, context))
+    isSuperuser(principal) ||
+    (principal.active &&
+      !policy.superuser &&
+      policy.permissions.every((p) =>
+        evaluatePermission(principal, p, context)
+      ))
   )
 }
 

@@ -11,6 +11,7 @@ import type AccessControlService from "../../modules/access-control/service"
 import { canonicalPath } from "../../lib/access/route-facts"
 import { describeNative } from "../../lib/access/native-resources"
 import { operationAllowed } from "../../lib/access/resources"
+import { isSuperuser } from "../../lib/access/permissions"
 import {
   nativeFieldSelection,
   nativePromotionRuleValue,
@@ -42,8 +43,31 @@ export async function enforceAdminAccess(
       .resolve<IUserModuleService>(Modules.USER)
       .retrieveUser(auth.actor_id, { select: ["id"] })
     const access = req.scope.resolve<AccessControlService>(ACCESS_CONTROL)
-    const descriptor = await access.resolveRequest(req)
     const principal = await access.principal(auth.actor_id)
+    const native = describeNative(
+      req.method,
+      req.originalUrl,
+      req.body,
+      auth.actor_id
+    )
+
+    // The native account lookup and current persisted assignment above establish
+    // Superuser authority. Keep guarded account-deletion redirects below, while
+    // native routes and validators own all other Superuser operations.
+    if (isSuperuser(principal) && !native?.action.redirect) {
+      const ruleValue = nativePromotionRuleValue(
+        native?.resource || "",
+        native?.params || {},
+        req.query
+      )
+      if (ruleValue !== undefined) {
+        req.query.value = ruleValue
+        delete req.query.id
+      }
+      return next()
+    }
+
+    const descriptor = await access.resolveRequest(req)
     const context = await access.permissionContext(req)
     const allowed = (permission: string) =>
       access.allows(principal, permission, context)

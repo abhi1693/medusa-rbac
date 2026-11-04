@@ -2,7 +2,10 @@ import {
   createAccessConfig,
   evaluatePermission,
 } from "../../src/lib/access/config"
-import { validatePermissions } from "../../src/lib/access/permissions"
+import {
+  SUPERUSER_AUTHORITY,
+  validatePermissions,
+} from "../../src/lib/access/permissions"
 import { it, expect, vi } from "vitest"
 import { Modules } from "@medusajs/framework/utils"
 import { enforceAdminAccess } from "../../src/api/middlewares/enforce-admin-access"
@@ -101,6 +104,11 @@ function harness(path = "/admin/products", method = "GET", body: unknown = {}) {
     run: () => enforceAdminAccess(req, res, next),
   }
 }
+function ordinaryHarness(...args: Parameters<typeof harness>) {
+  const h = harness(...args)
+  h.access.principal.mockResolvedValue({ ...principal, is_superuser: false })
+  return h
+}
 it("wires the native middleware and validation chain", () =>
   expect(middlewares).toBeDefined())
 it("exposes configured actor types alongside the registered permission catalog", async () => {
@@ -166,7 +174,9 @@ it("uses a computed self match rather than trusting a declared self rule", async
   const configuration = createAccessConfig({
     resources: [selfProfileResource()],
   })
-  const own = harness("/admin/profiles/u", "POST", { first_name: "Name" })
+  const own = ordinaryHarness("/admin/profiles/u", "POST", {
+    first_name: "Name",
+  })
   own.access.resolveRequest = configuration.resolveRequest
   await own.run()
   expect(own.next).toHaveBeenCalledWith()
@@ -177,7 +187,7 @@ it("uses a computed self match rather than trusting a declared self rule", async
     ["U", { first_name: "Name" }],
     ["u", { first_name: "Name", role_ids: [] }],
   ] as const) {
-    const denied = harness(`/admin/profiles/${id}`, "POST", body)
+    const denied = ordinaryHarness(`/admin/profiles/${id}`, "POST", body)
     denied.access.resolveRequest = configuration.resolveRequest
     denied.access.principal.mockResolvedValue({
       ...principal,
@@ -196,7 +206,9 @@ it.each(["customer", "vendor"])(
     const configuration = createAccessConfig({
       resources: [selfProfileResource([actorType])],
     })
-    const h = harness("/admin/profiles/u", "POST", { first_name: "Name" })
+    const h = ordinaryHarness("/admin/profiles/u", "POST", {
+      first_name: "Name",
+    })
     h.access.resolveRequest = configuration.resolveRequest
     expect((await configuration.resolveRequest(h.req))?.self).toBe(true)
     await h.run()
@@ -261,7 +273,7 @@ it("enforces registered fields, capabilities and unknown-command denial for anot
     ["inventory_quantity", false],
     ["*auth", false],
   ] as const) {
-    const h = harness("/admin/documents")
+    const h = ordinaryHarness("/admin/documents")
     h.access.resolveRequest = configuration.resolveRequest
     h.req.query.fields = fields
     h.access.principal.mockResolvedValue({
@@ -276,7 +288,10 @@ it("enforces registered fields, capabilities and unknown-command denial for anot
       expect(h.next).not.toHaveBeenCalled()
     }
   }
-  const unknown = harness("/admin/documents/Document_A/unregistered", "POST")
+  const unknown = ordinaryHarness(
+    "/admin/documents/Document_A/unregistered",
+    "POST"
+  )
   unknown.access.resolveRequest = configuration.resolveRequest
   await unknown.run()
   expect(unknown.res.status).toHaveBeenCalledWith(403)
@@ -305,7 +320,7 @@ it.each([
   "/admin/users/%252ftarget",
   "/admin/users//target",
 ])("never delegates unreviewed or ambiguous deletion: %s", async (path) => {
-  const h = harness(path, "DELETE")
+  const h = ordinaryHarness(path, "DELETE")
   await h.run()
   expect(h.res.status).toHaveBeenCalledWith(403)
   expect(h.res.redirect).not.toHaveBeenCalled()
@@ -342,14 +357,14 @@ it.each(["GET", "HEAD"])(
   }
 )
 it("denies inactive business access and unknown operations", async () => {
-  const h = harness()
+  const h = ordinaryHarness()
   h.access.principal.mockResolvedValue({ ...principal, active: false })
   await h.run()
   expect(h.res.status).toHaveBeenCalledWith(403)
-  const unknown = harness("/admin/unknown")
+  const unknown = ordinaryHarness("/admin/unknown")
   await unknown.run()
   expect(unknown.res.status).toHaveBeenCalledWith(403)
-  const denied = harness()
+  const denied = ordinaryHarness()
   denied.access.principal.mockResolvedValue({
     ...principal,
     is_superuser: false,
@@ -426,7 +441,7 @@ it("keeps layout scope validation, inactive users, unknown routes and field expa
       is_default,
     })),
   ]) {
-    const h = harness(
+    const h = ordinaryHarness(
       "/admin/layouts/product.details/configuration",
       "POST",
       body
@@ -440,7 +455,7 @@ it("keeps layout scope validation, inactive users, unknown routes and field expa
     ["/admin/layouts/product.details/configuration", "POST"],
     ["/admin/layouts/product.details/configuration", "DELETE"],
   ]) {
-    const h = harness(path, method)
+    const h = ordinaryHarness(path, method)
     h.access.principal.mockResolvedValue({ ...principal, active: false })
     await h.run()
     expect(h.res.status).toHaveBeenCalledWith(403)
@@ -451,21 +466,21 @@ it("keeps layout scope validation, inactive users, unknown routes and field expa
     ["/admin/layouts/product.details/configuration", "PUT"],
     ["/admin/layouts/product.details/configuration/shared", "POST"],
   ]) {
-    const h = harness(path, method)
+    const h = ordinaryHarness(path, method)
     await h.run()
     expect(h.res.status).toHaveBeenCalledWith(403)
   }
-  const selected = harness("/admin/layouts/configurations")
+  const selected = ordinaryHarness("/admin/layouts/configurations")
   selected.req.query.fields = "id,configuration,user_id"
   await selected.run()
   expect(selected.next).toHaveBeenCalledWith()
-  const expanded = harness("/admin/layouts/configurations")
+  const expanded = ordinaryHarness("/admin/layouts/configurations")
   expanded.req.query.fields = "*user.auth_identity"
   await expanded.run()
   expect(expanded.res.status).toHaveBeenCalledWith(403)
 })
 it.each(["GET", "HEAD"])("bounds read field selection (%s)", async (method) => {
-  const h = harness("/admin/products", method)
+  const h = ordinaryHarness("/admin/products", method)
   h.req.query.fields = "*"
   await h.run()
   expect(h.res.status).toHaveBeenCalledWith(403)
@@ -481,7 +496,7 @@ it.each(["GET", "HEAD"])(
   }
 )
 it("retains product permissions and bounded relations for native product detail reads", async () => {
-  const authorized = harness("/admin/products/prod_native")
+  const authorized = ordinaryHarness("/admin/products/prod_native")
   authorized.req.query.fields = "*categories,*shipping_profile,-variants"
   authorized.access.principal.mockResolvedValue(
     createPrincipal({
@@ -491,7 +506,7 @@ it("retains product permissions and bounded relations for native product detail 
   )
   await authorized.run()
   expect(authorized.next).toHaveBeenCalledWith()
-  const denied = harness("/admin/products/prod_native")
+  const denied = ordinaryHarness("/admin/products/prod_native")
   denied.req.query.fields = "*categories,*shipping_profile,-variants"
   denied.access.principal.mockResolvedValue(
     createPrincipal({ is_superuser: false, permissions: ["products.view"] })
@@ -503,7 +518,7 @@ it("retains product permissions and bounded relations for native product detail 
     "*unreviewed_relation",
     "*",
   ]) {
-    const superuser = harness("/admin/products/prod_native")
+    const superuser = ordinaryHarness("/admin/products/prod_native")
     superuser.req.query.fields = fields
     await superuser.run()
     expect(superuser.res.status).toHaveBeenCalledWith(403)
@@ -588,7 +603,7 @@ it("rejects unreviewed Variant subrelations and does not grant Variant-only fiel
     ["/admin/products/prod_native/variants/variant_native", "*"],
     ["/admin/products/prod_native", "*inventory_items"],
   ]) {
-    const h = harness(path)
+    const h = ordinaryHarness(path)
     h.req.query.fields = fields
     await h.run()
     expect(h.res.status).toHaveBeenCalledWith(403)
@@ -631,6 +646,7 @@ it("thin handlers use the access module and native users with validated inputs",
     access: principal,
     roles: [],
     permission_catalog: expect.any(Array),
+    superuser_authority: SUPERUSER_AUTHORITY,
   })
   await permissions.GET(h.req, h.res)
   expect(h.res.json.mock.calls.at(-1)[0].permissions).toHaveLength(
@@ -813,6 +829,7 @@ it("returns only the signed-in user's role names and avoids unbounded empty-ID q
     access: principal,
     roles: [{ id: "admin", name: "Superuser" }],
     permission_catalog: expect.any(Array),
+    superuser_authority: SUPERUSER_AUTHORITY,
   })
   h.access.principal.mockResolvedValue({ ...principal, role_ids: [] })
   h.access.listAccessRoles.mockClear()
@@ -958,7 +975,7 @@ it.each([
   "*stock_locations",
   "stock_locations.address",
 ])("keeps unreviewed inventory relations denied: %s", async (fields) => {
-  const h = harness("/admin/inventory-items/iitem_test")
+  const h = ordinaryHarness("/admin/inventory-items/iitem_test")
   h.req.query.fields = fields
   await h.run()
   expect(h.res.status).toHaveBeenCalledWith(403)
@@ -1063,6 +1080,11 @@ it("narrows the authorized customer group picker projection to member IDs", asyn
 
 it("normalizes only the authorized native sales-channel hydration query", async () => {
   const path = "/admin/promotions/rule-value-options/rules/sales_channel"
+  const superuser = harness(path)
+  superuser.req.query = { limit: "1", id: "sc_lookup" }
+  await superuser.run()
+  expect(superuser.req.query).toEqual({ limit: "1", value: "sc_lookup" })
+  expect(superuser.next).toHaveBeenCalledWith()
   for (const [url, query, permissions, normalized] of [
     [path, { limit: "1", id: "sc_lookup" }, ["promotions.view"], true],
     [path, { limit: "1", id: "sc_lookup" }, [], false],

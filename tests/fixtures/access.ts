@@ -1,5 +1,7 @@
 import {
   PERMISSION_IDS,
+  PERMISSIONS,
+  SUPERUSER_AUTHORITY,
   type AccessPrincipal,
 } from "../../src/lib/access/permissions"
 import type { Role, Staff, PermissionEntry } from "../../src/admin/lib/access"
@@ -100,3 +102,21 @@ export const createAuditEvent = (overrides = {}) => ({
   target_label: "Reader",
   ...overrides,
 })
+
+export async function withAccessMetadata(path: string, value: any) {
+  value = await value
+  if (value instanceof Error) return value
+  if (path === "/admin/access/me")
+    return {
+      permission_catalog: PERMISSIONS.map(([id, label, group]) => ({
+        id,
+        label,
+        group,
+      })),
+      superuser_authority: SUPERUSER_AUTHORITY,
+      ...value,
+    }
+  if (path === "/admin/access/permissions")
+    return { superuser_authority: SUPERUSER_AUTHORITY, ...value }
+  return value
+}

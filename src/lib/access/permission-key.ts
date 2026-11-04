@@ -1,4 +1,4 @@
-import type { AccessPrincipal } from "./permissions"
+import { isSuperuser, type AccessPrincipal } from "./permissions"
 
 export function permissionKeyMatches(pattern: string, permission: string) {
   return (
@@ -15,7 +15,7 @@ export function hasPermissionCandidate(
 ): boolean {
   return (
     principal.active &&
-    (principal.is_superuser ||
+    (isSuperuser(principal) ||
       principal.permissions.includes(permission) ||
       Boolean(
         principal.rules?.some(

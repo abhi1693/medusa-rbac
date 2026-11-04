@@ -1,7 +1,11 @@
 import Medusa from "@medusajs/js-sdk"
 import { useEffect, useRef } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import type { AccessPrincipal, Permission } from "../../lib/access/permissions"
+import type {
+  AccessPrincipal,
+  Permission,
+  SuperuserAuthority,
+} from "../../lib/access/permissions"
 import type { PermissionContext } from "../../lib/access/config"
 import type { PermissionDecision } from "../../lib/access/explain"
 
@@ -80,7 +84,8 @@ export const accessApi = {
   me: () =>
     sdk.client.fetch<{
       access: AccessPrincipal
-      permission_catalog?: PermissionEntry[]
+      permission_catalog: PermissionEntry[]
+      superuser_authority: SuperuserAuthority
       roles?: Pick<Role, "id" | "name">[]
     }>(`${root}/me`),
   roles: () => sdk.client.fetch<{ roles: Role[] }>(`${root}/roles`),
@@ -136,6 +141,7 @@ export const accessApi = {
   permissions: () =>
     sdk.client.fetch<{
       permissions: PermissionEntry[]
+      superuser_authority: SuperuserAuthority
       actor_types?: string[]
     }>(`${root}/permissions`),
   staff: (offset: number, q = "") =>

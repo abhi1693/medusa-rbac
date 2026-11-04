@@ -1,5 +1,6 @@
 import { Badge, Container, Heading, Text } from "@medusajs/ui"
 import type { PermissionEntry, Role } from "../../lib/access"
+import type { SuperuserAuthority } from "../../../lib/access/permissions"
 
 function conditionValue(value: unknown): string {
   return Array.isArray(value)
@@ -10,12 +11,15 @@ function conditionValue(value: unknown): string {
 export function PermissionSummary({
   role,
   permissions,
+  superuserAuthority,
 }: {
   role: Role
   permissions: PermissionEntry[]
+  superuserAuthority: SuperuserAuthority
 }) {
-  const grants = permissions.filter((permission) =>
-    role.permissions.includes(permission.id)
+  const grants = permissions.filter(
+    (permission) =>
+      role.is_superuser || role.permissions.includes(permission.id)
   )
   const groups = [...new Set(grants.map((permission) => permission.group))]
   return (
@@ -30,8 +34,7 @@ export function PermissionSummary({
       </div>
       {role.is_superuser && (
         <Text size="small" className="text-ui-fg-subtle px-6 py-4">
-          Superuser has every registered permission, including permissions added
-          later.
+          {superuserAuthority.description}
         </Text>
       )}
       {groups.map((group) => (
@@ -58,7 +61,7 @@ export function PermissionSummary({
           </ul>
         </section>
       ))}
-      {(role.rules || []).map((rule, index) => (
+      {(!role.is_superuser ? role.rules || [] : []).map((rule, index) => (
         <section key={index} className="px-6 py-4">
           <div className="border-ui-border-base overflow-hidden rounded-lg border">
             <div className="flex flex-col gap-2 px-4 py-3">

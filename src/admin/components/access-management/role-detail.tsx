@@ -125,6 +125,7 @@ export function RoleDetail({ roleId }: { roleId: string }) {
           <PermissionSummary
             role={role}
             permissions={catalog.data!.permissions}
+            superuserAuthority={catalog.data!.superuser_authority}
           />
         </div>
         <div className="flex flex-col gap-3">
