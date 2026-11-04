@@ -8,7 +8,7 @@ The page also loads its Variant table through `GET /admin/products/:id/variants`
 
 Medusa supports field selection and relation expansion through the `fields` query parameter. See the official [allowed-fields guide](https://docs.medusajs.com/learn/fundamentals/api-routes/allowed-fields) and [Admin API reference](https://docs.medusajs.com/api/admin). Native exclusions such as `-variants` remain valid. The plugin bounds requested paths for ordinary roles. Active native-user Superusers use the native route validators without the plugin field allowlist; ordinary roles still require reviewed fields and their associated grants.
 
-The existing regression suite predates unrestricted Superuser authority: its Superuser route/field denial expectations must be revised in the approved test batch. Ordinary-role negative cases must continue to retain route and inventory permissions and reject unreviewed fields. Direct isolated checks of this change cover native API-key/workflow routes, unmapped plugins, customer/inventory fields, inactive and non-staff rejection, guarded deletion, backend catalog responses and rendered permission summaries.
+The regression suite retains reviewed ordinary-role capability and field outcomes, while a separate full-inventory check authorizes active native-user Superusers and preserves guarded staff deletion. Native HTTP integration checks exercise API-key/workflow access, unmapped routes, native payload validation and ordinary-role denial. Component fixtures receive the backend authority/catalog response, and personal/role views cover complete Superuser catalogs even without explicit grants.
 
 ## Personal and shared layouts
 
@@ -91,4 +91,4 @@ Superuser recognition requires an active native staff principal resolved from cu
 
 The permission catalog and personal-access response include one backend-owned `superuser_authority` description. Personal access, role details, the catalog and diagnostics use that response, while all permission labels/identifiers come from the configured registry. The catalog is finite; API keys, workflows and unmapped Admin handlers are covered by the broader authority, not invented assignable grants. Ordinary accounts keep their existing explicit-grant/rule representation.
 
-Local verification uses an isolated source snapshot and generated server/Admin build; it does not certify a signed-in browser journey against the running package. Runtime activation and browser coverage must be reported separately.
+Local verification uses an isolated source snapshot, generated server/Admin builds, unit/component coverage and native HTTP integration with a disposable database. It does not certify a signed-in browser journey against a separately running merchant package. Runtime activation and browser coverage must be reported separately.

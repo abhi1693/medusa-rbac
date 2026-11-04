@@ -1,3 +1,4 @@
+import { withAccessMetadata } from "../fixtures/access"
 import { it, expect, vi, beforeEach } from "vitest"
 import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -42,7 +43,7 @@ beforeEach(() => {
         ? { role, actors: [], actor_count: 0, pending_invitation_count: 0 }
         : responses[String(url).split("/").at(-1)!]
       if (result instanceof Error) throw result
-      return result
+      return withAccessMetadata(String(url), result)
     })
   vi.spyOn(toast, "success").mockImplementation(() => "toast")
   vi.spyOn(toast, "error").mockImplementation(() => "toast")
@@ -88,7 +89,7 @@ async function roleMenu(
 it("shows the native role table toolbar, search and system role menu", async () => {
   const { user } = mount()
   expect(await screen.findByRole("heading", { name: "Roles" })).toBeVisible()
-  expect(screen.getByPlaceholderText("Search roles")).toBeVisible()
+  expect(await screen.findByPlaceholderText("Search roles")).toBeVisible()
   expect(
     screen.queryByRole("columnheader", { name: "Actions" })
   ).not.toBeInTheDocument()
@@ -145,7 +146,10 @@ it("confirms deletion, permits cancellation and reports a failure", async () => 
   )
   fetcher.mockImplementation(async (url: any, options: any) => {
     if (options?.method === "DELETE") throw new Error("Reassign users first")
-    return responses[String(url).split("/").at(-1)!]
+    return withAccessMetadata(
+      String(url),
+      responses[String(url).split("/").at(-1)!]
+    )
   })
   await roleMenu(user)
   await user.click(screen.getByRole("menuitem", { name: "Delete" }))
@@ -270,6 +274,7 @@ it("shows readable activity and paginates with the native footer", async () => {
   await user.click(screen.getByRole("button", { name: /^prev$/i }))
 })
 it("links directly to personal access and uses human permission names", async () => {
+  responses.me.access = createPrincipal({ permissions: [] })
   const { user } = mount("/?view=my-access")
   expect(
     await screen.findByRole("heading", { name: "My access" })

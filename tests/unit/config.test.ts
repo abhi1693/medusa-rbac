@@ -309,7 +309,8 @@ it("resolves actors and trusted request context through configured module option
     type: "user",
     id: "user_1",
   })
-  expect(access.allows(createPrincipal(), "unknown.read")).toBe(false)
+  expect(access.allows(createPrincipal(), "unknown.read")).toBe(true)
+  expect(access.allows(ordinary, "unknown.read")).toBe(false)
   expect(access.allows(createPrincipal(), permission[0])).toBe(true)
 })
 

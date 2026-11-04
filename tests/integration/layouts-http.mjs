@@ -21,7 +21,12 @@ export async function verifyLayouts(base, fixture) {
       },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     })
-    const result = await response.json()
+    const text = await response.text()
+    const result = response.headers
+      .get("content-type")
+      ?.includes("application/json")
+      ? JSON.parse(text)
+      : { message: text }
     assert.equal(
       response.status,
       expected,
@@ -83,7 +88,7 @@ export async function verifyLayouts(base, fixture) {
         zone,
         "POST",
         { is_default, configuration: configuration(3) },
-        403
+        actor === "superuser" ? 400 : 403
       )
   await request("manager", zone, "POST", {
     is_default: true,
@@ -148,8 +153,22 @@ export async function verifyLayouts(base, fixture) {
     ["/admin/layouts", "GET"],
     ["/admin/layouts/configurations", "POST"],
     [`${zone}/shared`, "POST"],
-  ])
-    await request("superuser", path, method, undefined, 403)
+  ]) {
+    await request("first", path, method, undefined, 403)
+    await request("superuser", path, method, undefined, 404)
+  }
+  for (const path of ["/admin/api-keys", "/admin/workflows-executions"]) {
+    await request("superuser", path)
+    await request("first", path, "GET", undefined, 403)
+  }
+  await request(
+    "superuser",
+    "/admin/unmapped-plugin-route",
+    "GET",
+    undefined,
+    404
+  )
+  await request("first", "/admin/unmapped-plugin-route", "GET", undefined, 403)
   await request(
     "second",
     "/admin/layouts/configurations?fields=*user.auth_identity",
@@ -158,6 +177,6 @@ export async function verifyLayouts(base, fixture) {
     403
   )
   console.info(
-    "PASS: native HTTP layouts preserve personal ownership, shared settings permission, active staff, strict scope and unknown-route denial"
+    "PASS: native HTTP layouts preserve personal ownership, shared settings permission, active staff, native Superuser validation and ordinary-role unknown-route denial"
   )
 }

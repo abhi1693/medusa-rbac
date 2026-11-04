@@ -169,6 +169,7 @@ it("shows immutable rule previews and custom personal permission labels", () => 
       <MyAccess
         superuserAuthority={SUPERUSER_AUTHORITY}
         access={createPrincipal({
+          is_superuser: false,
           permissions: ["documents.read"],
           rules: [{ permission: "documents.*", effect: "allow" }],
         })}
@@ -179,4 +180,5 @@ it("shows immutable rule previews and custom personal permission labels", () => 
     </TooltipProvider>
   )
   expect(screen.getByText("Read documents")).toBeInTheDocument()
+  expect(screen.getByLabelText("Permission or namespace")).toBeDisabled()
 })

@@ -1,3 +1,4 @@
+import { withAccessMetadata } from "../fixtures/access"
 import { beforeEach, expect, it, vi } from "vitest"
 import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -58,7 +59,7 @@ beforeEach(() => {
       }
       const response = options?.method ? evaluation : catalog
       if (response instanceof Error) throw response
-      return response
+      return withAccessMetadata(String(url), response)
     })
 })
 function mount(superuser = true) {
