@@ -2,7 +2,10 @@
 
 Package preparation, archive checks, checksums, provenance, draft release assets and
 npm publishing are centralized in [the shared npm release workflow](https://github.com/abhi1693/actions/blob/7283394d6444ce31b9844adbb7ebc0c7992c3eb4/docs/npm-release.md).
-This repository keeps only its CI and release event callers. The release caller
+This repository keeps only its CI and release event callers. Public bundle entry
+points and compiler options are declared directly in package.json using esbuild;
+there is no custom build-public.mjs wrapper. Both local npm builds/prepare and the
+shared release workflow use the same npm run build command. The release caller
 selects `package-check-preset: medusa-access-client`; the shared action checks every
 explicit export and README image, then verifies the extracted ESM/CommonJS client
 and its encoded actor request behavior. There is no local release/check script.
