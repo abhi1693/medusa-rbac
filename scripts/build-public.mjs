@@ -17,4 +17,3 @@ await build({
   splitting: true,
   outExtension: { ".js": ".mjs" },
 })
-await import("./check-package.mjs")
