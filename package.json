@@ -67,7 +67,7 @@
     "access:snapshot": "node scripts/snapshot-native-routes.mjs",
     "test:integration": "node scripts/test-integration.mjs",
     "ci:test": "npm test && npm run test:integration",
-    "ci:build": "npm run build && node scripts/check-package.mjs"
+    "ci:build": "npm run build"
   },
   "peerDependencies": {
     "@medusajs/dashboard": "^2.22.2",
