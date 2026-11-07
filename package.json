@@ -1,6 +1,6 @@
 {
   "name": "@abhi1693/medusa-rbac",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Configurable RBAC for Medusa v2 with native Admin screens, contextual permissions, invitations, auditing and multi-actor APIs",
   "license": "MIT",
   "repository": {
