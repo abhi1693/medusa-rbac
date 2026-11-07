@@ -5,9 +5,13 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Published release tag. Run this workflow from that same tag.
+        description: Published release tag. Run recovery from master.
         type: string
         required: true
+      preparation_revision:
+        description: Preparation workflow commit for existing assets; leave blank for current revision.
+        type: string
+        required: false
 permissions:
   contents: read
 jobs:
@@ -15,12 +19,12 @@ jobs:
     uses: ./.github/workflows/ci.yml
   publish:
     needs: validate
-    uses: abhi1693/actions/.github/workflows/npm-release.yml@7283394d6444ce31b9844adbb7ebc0c7992c3eb4
+    uses: abhi1693/actions/.github/workflows/npm-publish.yml@f50dc9e516019437e94a5c85627db2ab5db1ff59
     permissions:
       contents: read
       attestations: read
       id-token: write
     with:
-      operation: publish
+      preparation-revision: ${{ inputs.preparation_revision || 'f50dc9e516019437e94a5c85627db2ab5db1ff59' }}
       package-name: '@abhi1693/medusa-rbac'
       tag: ${{ github.event.release.tag_name || inputs.tag }}

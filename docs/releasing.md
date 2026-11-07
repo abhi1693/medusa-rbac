@@ -1,7 +1,7 @@
 # Preparing and publishing RBAC
 
 Package preparation, archive checks, checksums, provenance, draft release assets and
-npm publishing are centralized in [the shared npm release workflow](https://github.com/abhi1693/actions/blob/7283394d6444ce31b9844adbb7ebc0c7992c3eb4/docs/npm-release.md).
+npm publishing are centralized in [the shared npm release workflow](https://github.com/abhi1693/actions/blob/f50dc9e516019437e94a5c85627db2ab5db1ff59/docs/npm-release.md).
 This repository keeps only its CI and release event callers. Public bundle entry
 points and compiler options are declared directly in package.json using esbuild;
 there is no custom build-public.mjs wrapper. Both local npm builds/prepare and the
@@ -27,8 +27,11 @@ The shared workflow uses GitHub-hosted runners and OIDC; no npm token fallback i
 passed by these callers. Configure any trust relationship before the real release;
 its validity can only be proved by successful publication.
 
-For a recovery, dispatch publish.yml from the exact already-published release tag,
-providing that same tag as its `tag` input. The shared workflow refuses source/tag
+For a recovery, dispatch publish.yml from master, providing the already-published
+release tag as its `tag` input. When assets were prepared by an older shared
+revision, provide that exact commit as `preparation_revision`. The shared publisher
+checks out and verifies the tagged source and its original preparation attestation;
+it does not rebuild assets or move the tag. The shared workflow refuses source/tag
 mismatches, missing prepared assets, changed archive bytes or backwards latest moves.
 Existing versions succeed only when registry bytes match the prepared archive.
 
