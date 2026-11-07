@@ -130,7 +130,9 @@
     "authorization",
     "permissions",
     "ecommerce",
-    "typescript"
+    "typescript",
+    "role-based-access-control",
+    "medusa-admin"
   ],
   "publishConfig": {
     "access": "public"
