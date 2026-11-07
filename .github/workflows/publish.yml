@@ -15,7 +15,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
   publish:
     needs: validate
-    uses: abhi1693/actions/.github/workflows/npm-release.yml@99b9fbfce57fc45a8cc31b5c2e737fc4b0d78a9e
+    uses: abhi1693/actions/.github/workflows/npm-release.yml@4a3bb4b7e193f842d2457bd7fe2cb32e1931974a
     permissions:
       contents: read
       attestations: read
