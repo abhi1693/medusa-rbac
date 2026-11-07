@@ -13,7 +13,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
   release:
     needs: validate
-    uses: abhi1693/actions/.github/workflows/npm-release.yml@4a3bb4b7e193f842d2457bd7fe2cb32e1931974a
+    uses: abhi1693/actions/.github/workflows/npm-release.yml@011f279b83e64db26d97218367dab81cceba29ea
     permissions:
       contents: write
       id-token: write
