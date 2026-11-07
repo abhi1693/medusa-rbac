@@ -1,6 +1,6 @@
 {
   "name": "@abhi1693/medusa-rbac",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Configurable RBAC for Medusa v2 with native Admin screens, contextual permissions, invitations, auditing and multi-actor APIs",
   "license": "MIT",
   "repository": {
@@ -58,7 +58,7 @@
     }
   },
   "scripts": {
-    "build": "medusa plugin:build && node scripts/build-public.mjs",
+    "build": "medusa plugin:build && esbuild admin-access=src/public/admin-access.ts client=src/client.ts --bundle --format=esm --platform=browser --target=es2022 --packages=external --splitting --out-extension:.js=.mjs --outdir=.medusa/server/public",
     "prepare": "npm run build",
     "typecheck": "tsc --noEmit && tsc --project tsconfig.test.json",
     "test": "vitest run --coverage",
@@ -66,10 +66,8 @@
     "format:check": "prettier --check src tests scripts *.json *.mts",
     "access:snapshot": "node scripts/snapshot-native-routes.mjs",
     "test:integration": "node scripts/test-integration.mjs",
-    "test:publish": "node --test scripts/test-publish-npm.mjs",
-    "ci:test": "npm run test:publish && npm test && npm run test:integration",
-    "ci:build": "npm run build && node scripts/package-release.mjs --check-only",
-    "release:package": "npm run build && node scripts/package-release.mjs"
+    "ci:test": "npm test && npm run test:integration",
+    "ci:build": "npm run build"
   },
   "peerDependencies": {
     "@medusajs/dashboard": "^2.22.2",
