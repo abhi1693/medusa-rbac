@@ -34,3 +34,15 @@ jobs:
       npm-audit: true
       npm-include-dev: true
       npm-severity: high
+
+  release-package:
+    needs: validate
+    uses: abhi1693/actions/.github/workflows/npm-release.yml@99b9fbfce57fc45a8cc31b5c2e737fc4b0d78a9e
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    with:
+      operation: check
+      package-name: '@abhi1693/medusa-rbac'
+      package-check-command: node scripts/check-package.mjs
