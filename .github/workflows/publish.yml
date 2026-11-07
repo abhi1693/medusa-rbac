@@ -8,10 +8,6 @@ on:
         description: Published release tag. Run recovery from master.
         type: string
         required: true
-      preparation_revision:
-        description: Preparation workflow commit for existing assets; leave blank for current revision.
-        type: string
-        required: false
 permissions:
   contents: read
 jobs:
@@ -19,12 +15,11 @@ jobs:
     uses: ./.github/workflows/ci.yml
   publish:
     needs: validate
-    uses: abhi1693/actions/.github/workflows/npm-publish.yml@f50dc9e516019437e94a5c85627db2ab5db1ff59
+    uses: abhi1693/actions/.github/workflows/npm-publish.yml@0ee6f40a5e89417ec69c29bd1d7bfca195cb225b
     permissions:
       contents: read
       attestations: read
       id-token: write
     with:
-      preparation-revision: ${{ inputs.preparation_revision || 'f50dc9e516019437e94a5c85627db2ab5db1ff59' }}
       package-name: '@abhi1693/medusa-rbac'
       tag: ${{ github.event.release.tag_name || inputs.tag }}
