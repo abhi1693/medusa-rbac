@@ -1138,3 +1138,40 @@ it("does not add a fields key to strict native or custom read queries", async ()
     expect(Object.hasOwn(h.req.query, "fields")).toBe(false)
   }
 })
+
+it.each(["GET", "HEAD"])(
+  "allows authenticated native module discovery without assignments (%s)",
+  async (method) => {
+    for (const active of [true, false]) {
+      const h = ordinaryHarness("/admin/modules", method)
+      h.access.principal.mockResolvedValue({
+        ...principal,
+        active,
+        is_superuser: false,
+        role_ids: [],
+        permissions: [],
+      })
+      await h.run()
+      expect(h.next).toHaveBeenCalledWith()
+      expect(h.users.retrieveUser).toHaveBeenCalledWith("u", { select: ["id"] })
+    }
+    const anonymous = harness("/admin/modules", method)
+    delete anonymous.req.auth_context
+    await anonymous.run()
+    expect(anonymous.res.status).toHaveBeenCalledWith(401)
+    expect(anonymous.next).not.toHaveBeenCalled()
+  }
+)
+it.each([
+  ["POST", "/admin/modules"],
+  ["PUT", "/admin/modules"],
+  ["PATCH", "/admin/modules"],
+  ["DELETE", "/admin/modules"],
+  ["GET", "/admin/modules/unknown"],
+  ["HEAD", "/admin/modules/unknown"],
+])("denies unreviewed module operations (%s %s)", async (method, path) => {
+  const h = ordinaryHarness(path, method)
+  await h.run()
+  expect(h.res.status).toHaveBeenCalledWith(403)
+  expect(h.next).not.toHaveBeenCalled()
+})

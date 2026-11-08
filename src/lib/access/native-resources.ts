@@ -463,18 +463,20 @@ export const nativeResources: readonly ResourceDefinition[] = immutableConfig(
     accountResource("invites"),
     management,
     layouts,
-    ...["plugins", "feature-flags"].map((root): ResourceDefinition => ({
-      key: root,
-      root,
-      actorTypes: ["user"],
-      profile: { actions: { GET: "read" } },
-      operations: {
-        read: {
-          permissions: [],
-          access: root === "feature-flags" ? "public" : "authenticated",
+    ...["plugins", "feature-flags", "modules"].map(
+      (root): ResourceDefinition => ({
+        key: root,
+        root,
+        actorTypes: ["user"],
+        profile: { actions: { GET: "read" } },
+        operations: {
+          read: {
+            permissions: [],
+            access: root === "feature-flags" ? "public" : "authenticated",
+          },
         },
-      },
-    })),
+      })
+    ),
   ].map((resource) => ({
     ...resource,
     fieldRequirements: [
