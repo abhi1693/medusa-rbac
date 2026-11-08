@@ -387,7 +387,10 @@ test("native route snapshot matches installed Medusa route methods", () => {
   )
   for (const route of inventory) {
     // Reviewed additive 2.22.4 bootstrap endpoint; absent from the pinned 2.22.2.
-    if (route.path === "/admin/modules") {
+    if (
+      route.path === "/admin/modules" &&
+      nativeRequire("@medusajs/medusa/package.json").version === "2.22.2"
+    ) {
       assert.deepEqual(route.methods, ["GET"])
       continue
     }
