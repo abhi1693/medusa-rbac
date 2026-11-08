@@ -1,6 +1,6 @@
 {
   "name": "@abhi1693/medusa-rbac",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Configurable RBAC for Medusa v2 with native Admin screens, contextual permissions, invitations, auditing and multi-actor APIs",
   "license": "MIT",
   "repository": {
@@ -132,7 +132,8 @@
     "ecommerce",
     "typescript",
     "role-based-access-control",
-    "medusa-admin"
+    "medusa-admin",
+    "medusa-plugin-other"
   ],
   "publishConfig": {
     "access": "public"
