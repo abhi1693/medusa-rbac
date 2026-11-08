@@ -44,3 +44,23 @@ it("fails closed when an upstream inventory changes the parameter grammar of an 
     import("../../src/lib/access/native-resources.js")
   ).rejects.toThrow("Conflicting native parameter grammar")
 })
+
+it("keeps module inventory additions constrained to the reviewed root read profile", async () => {
+  vi.resetModules()
+  vi.doMock("../../src/lib/access/native-routes.json", () => ({
+    default: [
+      { path: "/admin/modules", methods: ["GET", "POST"] },
+      { path: "/admin/modules/:id", methods: ["GET", "DELETE"] },
+    ],
+  }))
+  const { describeNative } =
+    await import("../../src/lib/access/native-resources.js")
+  for (const method of ["GET", "HEAD"]) {
+    const descriptor = describeNative(method, "/admin/modules")
+    expect(descriptor?.access).toBe("authenticated")
+    expect(descriptor?.policy.permissions).toEqual([])
+    expect(describeNative(method, "/admin/modules/new-module")).toBeNull()
+  }
+  expect(describeNative("POST", "/admin/modules")).toBeNull()
+  expect(describeNative("DELETE", "/admin/modules/new-module")).toBeNull()
+})

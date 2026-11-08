@@ -4629,6 +4629,32 @@
       }
     },
     {
+      "route": "/admin/modules",
+      "method": "GET",
+      "path": "/admin/modules",
+      "policy": {
+        "permissions": []
+      },
+      "enforcement": {
+        "anonymous": {
+          "allowed": false,
+          "status": 401
+        },
+        "inactive": {
+          "allowed": true,
+          "status": 200
+        },
+        "staff": {
+          "allowed": true,
+          "status": 200
+        },
+        "superuser": {
+          "allowed": true,
+          "status": 200
+        }
+      }
+    },
+    {
       "route": "/admin/plugins",
       "method": "GET",
       "path": "/admin/plugins",

@@ -504,6 +504,10 @@
     "methods": ["GET"]
   },
   {
+    "path": "/admin/modules",
+    "methods": ["GET"]
+  },
+  {
     "path": "/admin/plugins",
     "methods": ["GET"]
   },

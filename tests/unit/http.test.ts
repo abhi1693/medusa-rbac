@@ -1138,3 +1138,78 @@ it("does not add a fields key to strict native or custom read queries", async ()
     expect(Object.hasOwn(h.req.query, "fields")).toBe(false)
   }
 })
+
+it.each(["GET", "HEAD"])(
+  "allows authenticated native module discovery without assignments (%s)",
+  async (method) => {
+    for (const active of [true, false]) {
+      const h = ordinaryHarness("/admin/modules", method)
+      h.access.principal.mockResolvedValue({
+        ...principal,
+        active,
+        is_superuser: false,
+        role_ids: [],
+        permissions: [],
+      })
+      await h.run()
+      expect(h.next).toHaveBeenCalledWith()
+      expect(h.users.retrieveUser).toHaveBeenCalledWith("u", { select: ["id"] })
+    }
+    const anonymous = harness("/admin/modules", method)
+    delete anonymous.req.auth_context
+    await anonymous.run()
+    expect(anonymous.res.status).toHaveBeenCalledWith(401)
+    expect(anonymous.next).not.toHaveBeenCalled()
+  }
+)
+it.each([
+  ["POST", "/admin/modules"],
+  ["PUT", "/admin/modules"],
+  ["PATCH", "/admin/modules"],
+  ["DELETE", "/admin/modules"],
+  ["GET", "/admin/modules/unknown"],
+  ["HEAD", "/admin/modules/unknown"],
+])("denies unreviewed module operations (%s %s)", async (method, path) => {
+  const h = ordinaryHarness(path, method)
+  await h.run()
+  expect(h.res.status).toHaveBeenCalledWith(403)
+  expect(h.next).not.toHaveBeenCalled()
+})
+
+it.each(["GET", "HEAD"])(
+  "keeps native module discovery isolated to valid user identities (%s)",
+  async (method) => {
+    for (const auth of [
+      undefined,
+      { actor_type: "user" },
+      { actor_type: "user", actor_id: "" },
+      { actor_type: "customer", actor_id: "u" },
+      { actor_type: "vendor", actor_id: "u" },
+      { actor_type: "api-key", actor_id: "u" },
+    ]) {
+      const h = harness("/admin/modules", method)
+      h.req.auth_context = auth
+      await h.run()
+      expect(h.res.status).toHaveBeenCalledWith(401)
+      expect(h.next).not.toHaveBeenCalled()
+      expect(h.users.retrieveUser).not.toHaveBeenCalled()
+      expect(h.access.principal).not.toHaveBeenCalled()
+    }
+    const deleted = harness("/admin/modules", method)
+    const error = new Error("User not found")
+    deleted.users.retrieveUser.mockRejectedValue(error)
+    await deleted.run()
+    expect(deleted.next).toHaveBeenCalledExactlyOnceWith(error)
+    expect(deleted.access.principal).not.toHaveBeenCalled()
+
+    const mismatched = ordinaryHarness("/admin/modules", method)
+    mismatched.access.principal.mockResolvedValue({
+      ...principal,
+      actor_type: "customer",
+      is_superuser: false,
+    })
+    await mismatched.run()
+    expect(mismatched.res.status).toHaveBeenCalledWith(403)
+    expect(mismatched.next).not.toHaveBeenCalled()
+  }
+)
