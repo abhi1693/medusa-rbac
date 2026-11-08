@@ -1175,3 +1175,41 @@ it.each([
   expect(h.res.status).toHaveBeenCalledWith(403)
   expect(h.next).not.toHaveBeenCalled()
 })
+
+it.each(["GET", "HEAD"])(
+  "keeps native module discovery isolated to valid user identities (%s)",
+  async (method) => {
+    for (const auth of [
+      undefined,
+      { actor_type: "user" },
+      { actor_type: "user", actor_id: "" },
+      { actor_type: "customer", actor_id: "u" },
+      { actor_type: "vendor", actor_id: "u" },
+      { actor_type: "api-key", actor_id: "u" },
+    ]) {
+      const h = harness("/admin/modules", method)
+      h.req.auth_context = auth
+      await h.run()
+      expect(h.res.status).toHaveBeenCalledWith(401)
+      expect(h.next).not.toHaveBeenCalled()
+      expect(h.users.retrieveUser).not.toHaveBeenCalled()
+      expect(h.access.principal).not.toHaveBeenCalled()
+    }
+    const deleted = harness("/admin/modules", method)
+    const error = new Error("User not found")
+    deleted.users.retrieveUser.mockRejectedValue(error)
+    await deleted.run()
+    expect(deleted.next).toHaveBeenCalledExactlyOnceWith(error)
+    expect(deleted.access.principal).not.toHaveBeenCalled()
+
+    const mismatched = ordinaryHarness("/admin/modules", method)
+    mismatched.access.principal.mockResolvedValue({
+      ...principal,
+      actor_type: "customer",
+      is_superuser: false,
+    })
+    await mismatched.run()
+    expect(mismatched.res.status).toHaveBeenCalledWith(403)
+    expect(mismatched.next).not.toHaveBeenCalled()
+  }
+)
