@@ -4,7 +4,7 @@ import path from "node:path"
 
 const require = createRequire(import.meta.url)
 const medusa = require("@medusajs/medusa/package.json")
-if (medusa.version !== "2.22.2") {
+if (medusa.version !== "2.23.0") {
   throw new Error(
     "Review RBAC route and field policies before accepting another Medusa version"
   )
@@ -46,16 +46,6 @@ async function visit(directory) {
   }
 }
 await visit(base)
-
-// Reviewed additive Dashboard bootstrap endpoint introduced in Medusa 2.22.4.
-// Preserve it when regenerating the pinned 2.22.2 inventory; this declares only
-// the root GET (and native HEAD fallback), not future commands or subpaths.
-// https://github.com/medusajs/medusa/blob/v2.22.4/packages/medusa/src/api/admin/modules/route.ts
-routes.splice(
-  routes.findIndex((route) => route.path === "/admin/plugins"),
-  0,
-  { path: "/admin/modules", methods: ["GET"] }
-)
 
 for (const entry of await readdir(base, { withFileTypes: true })) {
   if (!entry.isDirectory() || /rbac|role|polic/.test(entry.name)) continue

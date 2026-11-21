@@ -11,7 +11,7 @@ const CurrentAccess = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const client = useQueryClient()
-  const previous = useRef<string>()
+  const previous = useRef<string>(undefined)
   const fingerprint = access.data && accessFingerprint(access.data.access)
   useEffect(() => {
     if (!fingerprint || !access.isFetchedAfterMount) return

@@ -333,6 +333,10 @@ function accountResource(root: "users" | "invites"): ResourceDefinition {
         operation: root === "users" && method === "GET" ? "read" : "manage",
       }
       if (root === "users") {
+        const me =
+          facts.segments.length === 1 &&
+          facts.segments[0].kind === "literal" &&
+          facts.segments[0].value === "me"
         const item =
           facts.segments.length === 1 && facts.segments[0].kind === "parameter"
         const reset =
@@ -343,7 +347,7 @@ function accountResource(root: "users" | "invites"): ResourceDefinition {
         if (
           method !== "GET" &&
           !(
-            (method === "POST" && (item || reset)) ||
+            (method === "POST" && (item || reset || me)) ||
             (method === "DELETE" && item)
           )
         )
@@ -359,14 +363,19 @@ function accountResource(root: "users" | "invites"): ResourceDefinition {
             destination: "/admin/access/staff/:id",
             parameter: "id",
           }
-        if (
-          method === "GET" &&
-          facts.segments.length === 1 &&
-          facts.segments[0].kind === "literal" &&
-          facts.segments[0].value === "me"
-        ) {
+        if (me) {
           action.operation = "self"
           action.forceFields = personalFields
+          if (method === "POST")
+            action.payload = ({ body }) =>
+              body &&
+              typeof body === "object" &&
+              !Array.isArray(body) &&
+              Object.keys(body).every((key) =>
+                editableProfileFields.includes(key)
+              )
+                ? []
+                : null
         }
       } else if (
         method === "POST" &&

@@ -16,6 +16,14 @@
     "methods": ["GET", "POST"]
   },
   {
+    "path": "/admin/audit-logs/:id",
+    "methods": ["GET"]
+  },
+  {
+    "path": "/admin/audit-logs",
+    "methods": ["GET"]
+  },
+  {
     "path": "/admin/campaigns/:id/promotions",
     "methods": ["POST"]
   },
@@ -344,6 +352,10 @@
     "methods": ["GET"]
   },
   {
+    "path": "/admin/modules",
+    "methods": ["GET"]
+  },
+  {
     "path": "/admin/notifications/:id",
     "methods": ["GET"]
   },
@@ -501,10 +513,6 @@
   },
   {
     "path": "/admin/payments",
-    "methods": ["GET"]
-  },
-  {
-    "path": "/admin/modules",
     "methods": ["GET"]
   },
   {
@@ -701,50 +709,6 @@
   },
   {
     "path": "/admin/property-labels",
-    "methods": ["GET", "POST"]
-  },
-  {
-    "path": "/admin/rbac/me/permissions",
-    "methods": ["GET"]
-  },
-  {
-    "path": "/admin/rbac/policies/:id/roles",
-    "methods": ["GET"]
-  },
-  {
-    "path": "/admin/rbac/policies/:id",
-    "methods": ["DELETE", "GET", "POST"]
-  },
-  {
-    "path": "/admin/rbac/policies/assignable",
-    "methods": ["GET"]
-  },
-  {
-    "path": "/admin/rbac/policies",
-    "methods": ["GET", "POST"]
-  },
-  {
-    "path": "/admin/rbac/roles/:id/policies/:policy_id",
-    "methods": ["DELETE"]
-  },
-  {
-    "path": "/admin/rbac/roles/:id/policies",
-    "methods": ["GET", "POST"]
-  },
-  {
-    "path": "/admin/rbac/roles/:id",
-    "methods": ["DELETE", "GET", "POST"]
-  },
-  {
-    "path": "/admin/rbac/roles/:id/users",
-    "methods": ["DELETE", "GET", "POST"]
-  },
-  {
-    "path": "/admin/rbac/roles/assignable",
-    "methods": ["GET"]
-  },
-  {
-    "path": "/admin/rbac/roles",
     "methods": ["GET", "POST"]
   },
   {
@@ -1005,7 +969,7 @@
   },
   {
     "path": "/admin/users/me",
-    "methods": ["GET"]
+    "methods": ["GET", "POST"]
   },
   {
     "path": "/admin/users",

@@ -124,7 +124,7 @@ export type GeneratedQueryChecks = [
     JSON.stringify({
       name: "rbac-integration-host",
       private: true,
-      dependencies: { "@medusajs/medusa": "2.22.2" },
+      dependencies: { "@medusajs/medusa": "2.23.0" },
     })
   )
   await writeFile(

@@ -14,6 +14,22 @@
     "type",
     "updated_at"
   ],
+  "audit-logs": [
+    "action",
+    "actor_id",
+    "actor_type",
+    "ended_at",
+    "id",
+    "impersonator_id",
+    "metadata",
+    "outcome",
+    "request",
+    "request_data",
+    "resource_id",
+    "resource_type",
+    "response_data",
+    "started_at"
+  ],
   "campaigns": [
     "*budget",
     "campaign_identifier",
@@ -702,6 +718,8 @@
   "stores": [
     "*supported_currencies",
     "*supported_currencies.currency",
+    "*supported_locales",
+    "*supported_locales.locale",
     "created_at",
     "default_location_id",
     "default_region_id",

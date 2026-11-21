@@ -3,7 +3,7 @@
 [![CI](https://github.com/abhi1693/medusa-rbac/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/abhi1693/medusa-rbac/actions/workflows/ci.yml)
 [![GitHub release](https://img.shields.io/github/v/release/abhi1693/medusa-rbac?sort=semver)](https://github.com/abhi1693/medusa-rbac/releases)
 [![npm version](https://img.shields.io/npm/v/%40abhi1693%2Fmedusa-rbac)](https://www.npmjs.com/package/@abhi1693/medusa-rbac)
-[![Medusa >=2.22.2](https://img.shields.io/badge/Medusa-%E2%89%A52.22.2-7c3aed)](https://docs.medusajs.com/)
+[![Medusa >=2.23.0](https://img.shields.io/badge/Medusa-%E2%89%A52.23.0-7c3aed)](https://docs.medusajs.com/)
 [![Node.js >=22.22.0](https://img.shields.io/badge/Node.js-%E2%89%A522.22.0-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![MIT license](https://img.shields.io/github/license/abhi1693/medusa-rbac)](LICENSE)
 [![Sponsor](https://img.shields.io/badge/Sponsor-abhi1693-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/abhi1693)
@@ -12,7 +12,7 @@ Configurable access control for Medusa v2, with native Admin screens for roles, 
 
 **Superuser is the only built-in role.** Its definition is exported in code, and bootstrap creates and explicitly assigns it to a chosen native Medusa user. Applications can declare additional roles through configuration or create them in Admin/API. Configured roles never assign access automatically.
 
-Requires Medusa **2.22.2 or newer** and Node.js **22.22.0 or newer**. Validation and the native route/field snapshots target Medusa **2.22.2**, without enabling native Enterprise RBAC.
+Requires Medusa **2.23.0 or newer** and Node.js **22.22.0 or newer**. Validation and the native route/field snapshots target Medusa **2.23.0**, without enabling native Enterprise RBAC.
 
 [Install](#install) · [Admin showcase](#admin-showcase) · [Configuration](#configuration-and-extension-points) · [Storefront actors](#admin-and-storefront-actors) · [Server guarantees](#server-guarantees-and-boundaries)
 
@@ -51,7 +51,7 @@ npm install 'git+https://github.com/abhi1693/medusa-rbac.git#<commit>'
 
 The Git dependency runs `prepare` to build server and Admin extensions. npm and release archives already contain those build outputs. All methods install the package as `@abhi1693/medusa-rbac`.
 
-For Medusa 2.22.2, review the [dependency compatibility configuration](https://github.com/abhi1693/medusa-rbac/blob/master/docs/dependency-compatibility.md). npm applies dependency overrides from your application's root `package.json`; installing this plugin does not apply the repository's overrides to your application.
+For Medusa 2.23.0, review the [dependency compatibility configuration](https://github.com/abhi1693/medusa-rbac/blob/master/docs/dependency-compatibility.md). npm applies dependency overrides from your application's root `package.json`; installing this plugin does not apply the repository's overrides to your application.
 
 If npm reports that this dependency's `prepare` script was skipped, review the pinned commit and its build script, then approve that dependency's install scripts:
 

@@ -92,3 +92,7 @@ Superuser recognition requires an active native staff principal resolved from cu
 The permission catalog and personal-access response include one backend-owned `superuser_authority` description. Personal access, role details, the catalog and diagnostics use that response, while all permission labels/identifiers come from the configured registry. The catalog is finite; API keys, workflows and unmapped Admin handlers are covered by the broader authority, not invented assignable grants. Ordinary accounts keep their existing explicit-grant/rule representation.
 
 Local verification uses an isolated source snapshot, generated server/Admin builds, unit/component coverage and native HTTP integration with a disposable database. It does not certify a signed-in browser journey against a separately running merchant package. Runtime activation and browser coverage must be reported separately.
+
+## Medusa 2.23.0
+
+The route inventory scans Medusa's native Admin handlers. Enterprise RBAC routes now live outside the Admin namespace. The two new audit-log reads have no ordinary-staff capability. Store query defaults add the supported locales and locale relations. The Dashboard now submits profile edits to the current-user endpoint. Its handler selects the actor from the authentication context. The plugin carries forward its existing writable profile fields and limited response projection for this route, including for inactive staff. [Native user handler](https://github.com/medusajs/medusa/blob/v2.23.0/packages/medusa/src/api/admin/users/me/route.ts)
