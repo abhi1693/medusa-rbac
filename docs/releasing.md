@@ -42,7 +42,4 @@ Normal Node CI and Security continue to use the existing actions v1 workflows.
 
 ## Compatibility baseline
 
-Medusa 2.22.2 is the minimum supported version and the exact version used for validation and native route/field snapshots. Keep the Medusa package versions aligned; the corresponding Admin components use `@medusajs/ui` 4.2.9. Review the scoped [dependency compatibility configuration](dependency-compatibility.md). Regenerate the snapshots and validate the installed package when changing this baseline.
-
-The [official Medusa 2.22.2 release notes](https://github.com/medusajs/medusa/releases/tag/v2.22.2), reviewed on 2026-10-30, describe dependency updates across the server, CLI and Admin. They include Vite 7.3.7, errors for invalid `BigNumber`/`MathBN` inputs or invalid middleware body-size limits, and removal of the unused Tailwind Forms dependency. The plugin does not rely on these invalid-input behaviors or load Tailwind Forms. Use the supported upstream versions and rerun the compatibility checks after installation.
-
+Medusa 2.23.0, UI 4.3.0, React 19.3.1 and Vite 8.3.8 are the pinned build and native snapshot baseline. Regenerate and review the route and field snapshots for each upgrade. Validate the plugin build and the consuming host against the same dependency tree. [Medusa release notes](https://github.com/medusajs/medusa/releases/tag/v2.23.0)

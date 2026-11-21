@@ -5,10 +5,11 @@ import {
   DataTable,
   Heading,
   type DataTableProps,
+  type DataTableRowData,
 } from "@medusajs/ui"
 import { errorMessage } from "../../lib/access"
 
-export function SettingsTable<T>({
+export function SettingsTable<T extends DataTableRowData>({
   title,
   instance,
   action,

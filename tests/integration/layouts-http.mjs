@@ -132,6 +132,16 @@ export async function verifyLayouts(base, fixture) {
     (await request("first", zone)).default_configuration.configuration,
     configuration(3)
   )
+  const currentProfile = await request(
+    "inactive",
+    "/admin/users/me?fields=metadata",
+    "POST",
+    { first_name: "Current staff" }
+  )
+  assert.equal(currentProfile.user.id, fixture.inactive.id)
+  assert.equal(currentProfile.user.first_name, "Current staff")
+  assert.equal("metadata" in currentProfile.user, false)
+  await request("first", "/admin/users/me", "POST", { metadata: {} }, 403)
   const updatedProfile = await request(
     "inactive",
     `/admin/users/${fixture.inactive.id}`,

@@ -30,7 +30,8 @@ type ActorScenario = "anonymous" | "inactive" | "staff" | "superuser"
 const observeEnforcement = async (
   method: string,
   path: string,
-  scenario: ActorScenario
+  scenario: ActorScenario,
+  body: unknown = {}
 ) => {
   let status = 200
   let allowed = false
@@ -57,7 +58,7 @@ const observeEnforcement = async (
   const request = {
     originalUrl: path,
     method,
-    body: {},
+    body,
     query: {},
     auth_context:
       scenario === "anonymous"
@@ -104,14 +105,64 @@ const observeEnforcement = async (
 // reviewed 4981e92 package. It contains outcomes, not its implementation.
 describe("reviewed native authorization contract", () => {
   it("covers every method of the pinned native route catalog", () => {
-    const actual = contract.routes.map(
-      ({ route, method }) => `${method} ${route}`
+    // Medusa moved Enterprise RBAC endpoints outside the /admin namespace.
+    const retained = contract.routes.filter(
+      ({ route }) => !route.startsWith("/admin/rbac/")
     )
+    const actual = [
+      ...retained.map(({ route, method }) => `${method} ${route}`),
+      "GET /admin/audit-logs",
+      "GET /admin/audit-logs/:id",
+      "POST /admin/users/me",
+    ]
     const expected = inventory.flatMap(({ path, methods }) =>
       methods.map((method) => `${method} ${path}`)
     )
     expect(actual.sort()).toEqual(expected.sort())
   })
+
+  it("applies existing self-profile limits to the native current-user write", async () => {
+    const route = "/admin/users/me"
+    for (const actor of ["staff", "inactive"] as const) {
+      const result = await observeEnforcement("POST", route, actor, {
+        first_name: "Updated",
+      })
+      expect(result).toEqual({
+        allowed: true,
+        status: 200,
+        fields: "id,email,first_name,last_name,avatar_url",
+      })
+      for (const body of [
+        null,
+        [],
+        "invalid",
+        { id: "other" },
+        { metadata: {} },
+      ])
+        expect(await observeEnforcement("POST", route, actor, body)).toEqual({
+          allowed: false,
+          status: 403,
+        })
+    }
+    expect(await observeEnforcement("POST", route, "anonymous")).toEqual({
+      allowed: false,
+      status: 401,
+    })
+  })
+
+  it.each(["/admin/audit-logs", "/admin/audit-logs/example"])(
+    "keeps %s restricted to Superuser",
+    async (route) => {
+      expect(await observeEnforcement("GET", route, "staff")).toEqual({
+        allowed: false,
+        status: 403,
+      })
+      expect(await observeEnforcement("GET", route, "superuser")).toEqual({
+        allowed: true,
+        status: 200,
+      })
+    }
+  )
 
   it.each(contract.routes)(
     "$method $route preserves its reviewed capability requirements",

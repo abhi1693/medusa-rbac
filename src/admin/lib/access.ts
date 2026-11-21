@@ -181,7 +181,7 @@ export const accessApi = {
 
 export function useAccess() {
   const client = useQueryClient()
-  const previous = useRef<string>()
+  const previous = useRef<string>(undefined)
   const result = useQuery({
     queryKey: ["medusa-rbac", "me"],
     queryFn: accessApi.me,
